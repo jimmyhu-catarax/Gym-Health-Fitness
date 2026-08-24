@@ -130,6 +130,6 @@ see charts, the heatmap and the workout flow with real-looking data.
 
 - `main` is the deployable branch. Work happens on short-lived `feature/…` / `fix/…` branches
   and lands via PR.
-- **There is no CI.** No GitHub Actions workflow exists, so nothing re-runs the test suite on a
-  push or a PR. A green PR means nobody checked, not that checks passed — run
-  `cd frontend && npm test` yourself before pushing.
+- **CI runs the suite and the build** on every PR and every push to main, over Node 22 and 24
+  (`.github/workflows/test.yml`). Run `cd frontend && npm test` before pushing anyway — it
+  takes three seconds and saves a round trip.

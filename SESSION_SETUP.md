@@ -43,7 +43,7 @@ is worse than none — it misleads with authority, which ad-hoc rediscovery at l
 
 # Project Environment Record
 
-_Last updated: 2026-08-24_
+_Last updated: 2026-08-24 (after PRs #1 and #2 merged)_
 
 ## Static — only recompute when the project's needs actually change
 
@@ -65,10 +65,14 @@ _Last updated: 2026-08-24_
 
 ## Dynamic — the only part that should change often
 
-- **Last session:** imported openGym as the base; reworked the colour system around
-  fills vs. inks (127 failing contrast pairs → 0); added Google Fit / Health Connect / Whoop
-  import with a dependency-free ZIP and SQLite reader; added `CLAUDE.md`, this file, and CI.
-- **Open:** PR #1 (draft) `claude/opengym-design-data-import-1nij4s` → `main`. Issues: 0.
-- **Next step:** merge the project-setup PR, then get PR #1 green and out of draft.
-- **Decisions to revisit:** fork goal set to *divergent product* (2026-08-24) — the upstream
-  branding scrub and fork-owned container images follow from it and want issues opening.
+- **Last session:** imported openGym as the base; reworked the colour system around fills
+  vs. inks (127 failing contrast pairs → 0); added Google Fit / Health Connect / Whoop import
+  with a dependency-free ZIP and SQLite reader; added `CLAUDE.md`, this file and CI. **PR #2
+  then PR #1 both merged**, so main now carries the whole application, green on Node 22 and 24.
+- **Open:** nothing. No open PRs, no issues.
+- **Next step:** enable branch protection on `main` requiring the `tests` check — the workflow
+  exists but nothing yet *forces* a red PR to stay unmerged. Then open the fork-identity issues.
+- **Decisions to revisit:** fork goal set to *divergent product* (2026-08-24). Its consequences
+  are not done: README badges, `docs/SELF_HOSTING.md`'s clone URL and `SECURITY.md`'s release
+  process still describe upstream, and `docker-compose.yml` still pulls upstream's ghcr.io
+  images unless you pass `--build`. Each wants an issue rather than a drive-by edit.
