@@ -51,7 +51,7 @@ export function parseCSV(text) {
   return rows
 }
 
-const norm = h => h.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+export const norm = h => h.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 
 // header text -> the field we care about. Specific names first; first match wins.
 const COLUMNS = [
@@ -219,7 +219,7 @@ export function matchExercise(name) {
 }
 
 // Categories the exporters use -> the dataset's body parts, for exercises we invent.
-const CATEGORY_BP = {
+export const CATEGORY_BP = {
   chest: 'chest', back: 'back', lats: 'back', shoulders: 'shoulders', delts: 'shoulders',
   legs: 'upper legs', quads: 'upper legs', hamstrings: 'upper legs', glutes: 'upper legs',
   calves: 'lower legs', abs: 'waist', core: 'waist', obliques: 'waist',
@@ -229,7 +229,7 @@ const CATEGORY_BP = {
 
 /* ----------------------------------------------------------- conversion --- */
 
-const num = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(n) ? n : 0 }
+export const num = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(n) ? n : 0 }
 // An effort rating out of someone else's export. A blank cell means "not rated" and has to
 // stay absent rather than becoming 0 — and 0 itself means opposite things on the two scales:
 // RIR 0 is a set taken to failure and worth keeping, while RPE has no 0 (the scale is 1–10),
@@ -242,7 +242,7 @@ const effortNum = (raw, zeroMeansRated) => {
   if (!isFinite(n) || n < 0 || (n === 0 && !zeroMeansRated)) return null
   return Math.min(10, Math.round(n * 100) / 100)
 }
-const LB_TO_KG = 0.45359237
+export const LB_TO_KG = 0.45359237
 const p2 = n => String(n).padStart(2, '0')
 const MON = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 }
 
@@ -269,7 +269,7 @@ export function parseWhen(s) {
 const hm = (h, mi) => (h === undefined ? null : (parseInt(h, 10) || 0) * 3600000 + (parseInt(mi, 10) || 0) * 60000)
 
 /** "HH:MM:SS" · "MM:SS" · "90" -> minutes */
-function toMinutes(v) {
+export function toMinutes(v) {
   const s = String(v ?? '').trim()
   if (!s) return 0
   if (s.includes(':')) {

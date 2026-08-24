@@ -68,7 +68,7 @@ function zip64Extra(dv, at, len, need) {
 
 async function inflateRaw(bytes) {
   const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
-  return new Response(stream).text()
+  return new Uint8Array(await new Response(stream).arrayBuffer())
 }
 
 /**
@@ -116,24 +116,28 @@ export async function unzip(buf) {
 
     const dir = name.endsWith('/')
     const encrypted = (flags & 0x1) !== 0
+    async function bytes() {
+      if (dir) return new Uint8Array(0)
+      if (encrypted) throw new Error('encrypted')
+      if (method !== 0 && method !== 8) throw new Error('unsupported-method')
+      // The local header repeats the name and carries its own extra field, whose length
+      // differs from the central one — so the data offset has to be read from it, not
+      // computed from the central directory's lengths.
+      if (lho + 30 > u8.byteLength) throw new Error('truncated')
+      const lnlen = dv.getUint16(lho + 26, true)
+      const lelen = dv.getUint16(lho + 28, true)
+      const at = lho + 30 + lnlen + lelen
+      const raw = u8.subarray(at, at + csize)
+      return method === 0 ? raw : inflateRaw(raw)
+    }
     out.push({
       name,
       size: usize,
       dir,
-      async text() {
-        if (dir) return ''
-        if (encrypted) throw new Error('encrypted')
-        if (method !== 0 && method !== 8) throw new Error('unsupported-method')
-        // The local header repeats the name and carries its own extra field, whose length
-        // differs from the central one — so the data offset has to be read from it, not
-        // computed from the central directory's lengths.
-        if (lho + 30 > u8.byteLength) throw new Error('truncated')
-        const lnlen = dv.getUint16(lho + 26, true)
-        const lelen = dv.getUint16(lho + 28, true)
-        const at = lho + 30 + lnlen + lelen
-        const raw = u8.subarray(at, at + csize)
-        return method === 0 ? new TextDecoder().decode(raw) : inflateRaw(raw)
-      },
+      bytes,
+      // Separate from bytes() because a Health Connect backup is a SQLite database, and
+      // decoding those bytes as text would corrupt them on the way through.
+      async text() { return new TextDecoder().decode(await bytes()) },
     })
   }
   if (!out.length) throw new Error('not-a-zip')

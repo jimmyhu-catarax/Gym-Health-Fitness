@@ -176,7 +176,7 @@ export default function Settings() {
     <Section title={t('Data')}>
       <Row icon="sparkles" iconTint="var(--acc)" title={t('Load starter plan (PPL)')} accessory="chevron" onClick={loadStarterPlan} />
       <Row icon="shuffle" iconTint="var(--teal)" title={t('Import from another app')}
-        subtitle={t('FitNotes, Strong, Hevy — or body weight from Apple Health')}
+        subtitle={t('FitNotes, Strong, Hevy, Whoop — or body weight from Apple Health, Google Fit and Health Connect')}
         accessory="chevron" onClick={() => importRef.current.click()} />
       <Row icon="upload" iconTint="var(--blue)" title={t('Import backup')} accessory="chevron" onClick={() => fileRef.current.click()} />
       <Row icon="download" iconTint="var(--blue)" title={t('Export backup (JSON)')} accessory="chevron" onClick={doExport} />
@@ -184,7 +184,9 @@ export default function Settings() {
     </Section>
     <input ref={fileRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={doImport} />
     {/* Reset after reading so picking the same file twice still fires onChange. */}
-    <input ref={importRef} type="file" accept=".csv,.xml,text/csv,text/xml" style={{ display: 'none' }}
+    {/* .zip covers Google Takeout, Whoop and Health Connect, which all export archives. */}
+    <input ref={importRef} type="file" accept=".csv,.xml,.json,.zip,.db,text/csv,text/xml,application/json,application/zip"
+      style={{ display: 'none' }}
       onChange={ev => { const f = ev.target.files[0]; if (f) importFromApp(f); ev.target.value = '' }} />
 
     {/* "Add to Home screen" makes no sense inside the native app */}

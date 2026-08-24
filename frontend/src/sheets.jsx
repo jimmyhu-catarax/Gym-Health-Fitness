@@ -16,6 +16,8 @@ import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
 import BodyMap from './components/BodyMap.jsx'
 import { loadOfWorkouts } from './lib/muscles.js'
 import { parseImport, mergeImport } from './lib/import-csv.js'
+import { parseArchive, parseHealthText } from './lib/import-health.js'
+import { unzip, looksLikeZip } from './lib/unzip.js'
 import { buildPlanBundle, parsePlan, mergePlan, printPlan } from './lib/plan-share.js'
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
@@ -178,6 +180,12 @@ function ImportSummary({ parsed, close }) {
     {!isBW && !parsed.fileUnit && !parsed.mixedUnits && <div className="small dim" style={{ marginBottom: 10 }}>
       {t('The file does not say which unit it uses — numbers are imported as they are.')}
     </div>}
+    {/* Health Connect's schema isn't published, so the importer works out which column is
+        the weight and what unit it is in. Say so — an assumption the user can check beats a
+        silent one, and this is the sheet where they can still say no. */}
+    {parsed.readAs && <div className="small dim" style={{ marginBottom: 10 }}>
+      {t('Read from {0}.{1}, stored in {2}.', parsed.readAs.table, parsed.readAs.massColumn, parsed.readAs.storedUnit)}
+    </div>}
     {have > 0 && <div className="small dim" style={{ marginBottom: 10 }}>
       {t('{0} days already have data here and will be left alone.', have)}
     </div>}
@@ -205,23 +213,45 @@ function ImportSummary({ parsed, close }) {
   </>
 }
 
-/** Read a CSV/XML export, then show what it would do. */
-export function importFromApp(file, onDone) {
-  const rd = new FileReader()
-  rd.onload = () => {
-    let parsed
-    try { parsed = parseImport(String(rd.result), { unit: S().unit }) }
-    catch (e) { toast(t('Could not read that file')); return }
-    if (parsed.error === 'empty') { toast(t('That file is empty')); return }
-    if (parsed.error) { toast(t("That file's columns aren't recognised — see the docs for supported apps.")); return }
-    if (parsed.kind === 'bodyweight' ? !parsed.bodyweight.length : !parsed.workouts.length) {
-      toast(t('Nothing to import from that file')); return
+/**
+ * Read an export and show what it would do.
+ *
+ * The file is read as bytes rather than text because Google Takeout, Whoop and Health
+ * Connect all hand you a .zip, and Health Connect's is a SQLite database that decoding as
+ * text would corrupt. A loose file still goes down the old path: the workout-app importer
+ * first, then the health-platform one, so adding these sources cannot change how a
+ * FitNotes or Strong export is read.
+ */
+export async function importFromApp(file, onDone) {
+  const opts = { unit: S().unit }
+  let parsed
+  try {
+    const buf = new Uint8Array(await file.arrayBuffer())
+    if (looksLikeZip(buf)) {
+      parsed = await parseArchive(await unzip(buf), opts)
+    } else {
+      const text = new TextDecoder().decode(buf)
+      parsed = parseImport(text, opts)
+      if (parsed.error) {
+        const health = parseHealthText(text, opts)
+        if (!health.error) parsed = health
+      }
     }
-    ui().openSheet(close => <ImportSummary parsed={parsed} close={close} />)
-    onDone && onDone()
+  } catch (e) {
+    toast(e && e.message === 'not-a-zip' ? t('That file is not a readable archive') : t('Could not read that file'))
+    return
   }
-  rd.onerror = () => toast(t('Could not read that file'))
-  rd.readAsText(file)
+  if (parsed.error === 'empty') { toast(t('That file is empty')); return }
+  if (parsed.error === 'no-weight-table') {
+    toast(t('No body-weight records found in that Health Connect backup')); return
+  }
+  if (parsed.error === 'unreadable-db') { toast(t("That Health Connect database couldn't be read")); return }
+  if (parsed.error) { toast(t("That file's columns aren't recognised — see the docs for supported apps.")); return }
+  if (parsed.kind === 'bodyweight' ? !parsed.bodyweight.length : !parsed.workouts.length) {
+    toast(t('Nothing to import from that file')); return
+  }
+  ui().openSheet(close => <ImportSummary parsed={parsed} close={close} />)
+  onDone && onDone()
 }
 
 /* ============================ target weight ============================ */
