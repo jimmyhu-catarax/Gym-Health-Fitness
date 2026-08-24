@@ -7,6 +7,9 @@ This file records what a session **cannot** work out by reading the code. Layout
 and the standard build commands are deliberately not here — `ls`, the manifests and `--help`
 already answer those.
 
+`CONTRIBUTING.md` is binding for code style, project layout and testing. This file defers to
+it rather than paraphrasing it; where the two ever disagree, CONTRIBUTING wins.
+
 ## Provenance and licensing
 
 Bootstrapped from [openGym](https://github.com/DuarteSantos8/openGym) (via the
@@ -25,17 +28,27 @@ Anything derived from this codebase inherits AGPL. Don't relicense, and don't st
 is why `lib/unzip.js` and `lib/sqlite.js` exist as hand-written readers instead of JSZip and
 sql.js (a megabyte of WASM for one import path). Before adding a package, check whether the
 platform already does it: `DecompressionStream` inflates, `Intl` formats, `crypto.subtle`
-hashes. If a dependency really is warranted, say why in the PR.
+hashes. Propose and wait; don't just install.
+
+The same rule reaches past npm: **the backend is plain JSON files on disk by design** — README
+says "no database server, no cloud dependencies". A hosted database (the Supabase MCP server is
+available in some environments) is not a shortcut here, it's a violation.
 
 **Never commit `data/` or `media/`.**
 
 - `data/` holds the session secret, the VAPID **private** key and users' passkey credentials.
-  The upstream fork committed all three to a public repo; that is exactly the mistake
-  `.gitignore` now prevents. If you ever see a real secret in a diff, stop and flag it.
+  Upstream's git history contains all three as real values, so never restore or cherry-pick a
+  `data/` path from upstream. If you ever see a real secret in a diff, stop and flag it.
 - `media/` is ~137 MB of third-party exercise media. `NOTICE.md` states it is not distributed
   here, and `docker compose up` / `scripts/fetch-media.sh` fetch it on first run.
 
-Both directories keep a `.gitkeep` so the compose bind mounts stay valid.
+Both directories keep a `.gitkeep` so the compose bind mounts stay valid. **Never regenerate
+`.gitignore`** from a stock Node template — it carries these carve-outs as policy, with the
+reasoning in comments. Append to it; don't replace it.
+
+**Ask before destructive operations.** `data/` is live user state at runtime, so `rm` against
+it, `docker compose down -v` (removes volumes), and any history rewrite all get confirmed
+first, not assumed.
 
 ## Colour: a fill is not an ink
 
@@ -88,7 +101,13 @@ which the module headers spell out:
 ## Running it
 
 Everything npm lives in `frontend/` — there is **no root `package.json`**, so `npm test` and
-`npm run build` must be run from there.
+`npm run build` must be run from there. The test suite needs **Node ≥ 22.5**: `sqlite.test.js`
+and `import-health.test.js` build their fixtures with the built-in `node:sqlite`, which older
+Node doesn't have. A CI matrix that includes Node 20 fails for that reason alone.
+
+**`docker compose up` without `--build` runs upstream's prebuilt images**
+(`ghcr.io/duartesantos8/opengym-*:latest`), not this fork's code. Use `--build` to run what is
+actually in this repo, or the design work and the new importers simply won't be there.
 
 In `npm run dev`, requests to `/img/*` and `/gif/*` return **502 and that is expected**: Vite
 proxies them to a media server that only exists once the media has been fetched. The app
