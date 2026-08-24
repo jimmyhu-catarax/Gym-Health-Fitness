@@ -1,0 +1,29 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+frontend/dist/
+
+# runtime data — users, passkeys, per-user state, session secret.
+# NEVER commit these: `data/secret` and `data/vapid.json` are live keys.
+/data/*
+!/data/.gitkeep
+
+# exercise media — ~140 MB, fetched on first run from
+# github.com/hasaneyldrm/exercises-dataset (see NOTICE.md).
+/media/img/*
+/media/gif/*
+!/media/img/.gitkeep
+!/media/gif/.gitkeep
+
+# local env
+.env
+.env.*
+!.env.example
+
+# editor / OS noise
+.DS_Store
+*.log
+.idea/
+.vscode/
