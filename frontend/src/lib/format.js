@@ -44,4 +44,13 @@ export function weekKey(d) {
 export const localTZ = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { return 'UTC' } }
 
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
-export const ACCENTS = { lime: '#30d158', sky: '#0a84ff', orange: '#ff9f0a', violet: '#bf5af2', pink: '#ff375f', red: '#ff453a', teal: '#40c8e0', gold: '#ffd60a' }
+// The accent picker's swatches, and the set of valid accent keys.
+//
+// These are the palette tokens rather than literal hex, so a swatch paints the colour the
+// accent will actually be — including in the light theme, where the fills are deeper. Held
+// as hex, this list silently went stale when the palette changed and the picker started
+// advertising eight colours the app no longer used.
+export const ACCENTS = {
+  lime: 'var(--green)', sky: 'var(--blue)', orange: 'var(--orange)', violet: 'var(--purple)',
+  pink: 'var(--pink)', red: 'var(--red)', teal: 'var(--teal)', gold: 'var(--yellow)',
+}

@@ -11,6 +11,9 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+// Aliased: ACCENTS below is the set parsed out of the stylesheet, and the whole point
+// of this check is that the two agree.
+import { ACCENTS as PICKER } from './lib/format.js'
 
 const CSS = readFileSync(fileURLToPath(new URL('./index.css', import.meta.url)), 'utf8')
 
@@ -120,6 +123,30 @@ describe('design tokens', () => {
   it('defines all eight accents — the keys are persisted per profile', () => {
     // Renaming one would silently reset somebody's saved colour on next load.
     expect(NAMES.sort()).toEqual(['gold', 'lime', 'orange', 'pink', 'red', 'sky', 'teal', 'violet'])
+  })
+
+  it('paints the accent picker from the stylesheet, not from a copy of it', () => {
+    // ACCENTS used to hold literal hex. It then went stale the moment the palette changed,
+    // and the picker spent a release offering eight colours the app no longer used — while
+    // every contrast test still passed, because none of them looked at that file.
+    for (const [key, value] of Object.entries(PICKER)) {
+      expect(NAMES, `accent key ${key}`).toContain(key)
+      expect(value, `accent ${key} should reference a token, not a literal colour`).toMatch(/^var\(--[\w-]+\)$/)
+      for (const theme of THEMES) {
+        expect(() => color(value, scopeFor(theme, key)), `${key} in ${theme}`).not.toThrow()
+      }
+    }
+    expect(Object.keys(PICKER).sort()).toEqual(NAMES.slice().sort())
+  })
+
+  it('gives each accent the same colour the picker shows for it', () => {
+    // A swatch that does not match the accent it sets is a lie the user can see.
+    for (const key of NAMES) {
+      for (const theme of THEMES) {
+        const scope = scopeFor(theme, key)
+        expect(color(PICKER[key], scope), `${key}/${theme}`).toEqual(color('var(--acc)', scope))
+      }
+    }
   })
 
   it('gives every palette entry a fill, an ink and a pressed value, in both themes', () => {
