@@ -1,8 +1,8 @@
 /* ============================================================================
    openGym — design system
    ----------------------------------------------------------------------------
-   Rebuilt around four rules, each aimed at a specific "generated" tell in the
-   previous sheet:
+   Five rules. The first four were already here and still hold; the fifth is what
+   the colour rework added.
 
    1. ONE TYPE SCALE, MOSTLY REGULAR WEIGHT. The old sheet set font-weight 700/800
       on nearly every element, which flattens hierarchy — when everything shouts,
@@ -12,41 +12,84 @@
       saturated blue-greys. Colour is spent only on the accent and on status.
    3. HAIRLINES, NOT BORDERS. Separators are sub-pixel and inset past the icon
       rail, so a list reads as one object instead of a stack of outlined boxes.
+      A card additionally carries --ring, a half-pixel edge, so it reads as an
+      object on a near-black page instead of a slightly different black.
    4. MOTION THAT ACKNOWLEDGES, NOT ANIMATES. Presses scale ~2%, transitions run
       140–220ms on an ease-out curve. Nothing bounces or slides for decoration.
+   5. A FILL IS NOT AN INK. Every palette entry is two values: `--x` fills a shape,
+      `--x-ink` writes a word. A fill has to be vivid to work as a button; an ink
+      has to be legible on the surfaces it lands on, and in the light theme those
+      are not the same colour. Conflating them is what left the previous sheet
+      with 127 failing contrast pairs — accent text on a white card at 2.22:1, the
+      PR badge at 1.39:1. Nothing here is eyeballed: hues are placed in OKLCH and
+      lightness is solved against a contrast target, then index.css.test.js
+      re-measures every pair on every theme and accent.
    ========================================================================== */
 
 /* ---------------------------------------------------------------- tokens -- */
-:root {
-  /* surfaces — dark is the default */
-  --bg:        #000000;
-  --bg-el:     #0e0e10;   /* elevated backdrop (sheets, bars) */
-  --surface:   #1c1c1e;   /* card / grouped-list fill */
-  --surface-2: #2c2c2e;   /* pressed + nested fill */
-  --surface-3: #3a3a3c;   /* controls (segmented track, switch off) */
+/* Colour is split two ways, because one colour cannot do both jobs.
+   `--x`     is a FILL — a button, a chip, the FAB, a chart stroke. It carries a label.
+   `--x-ink` is the same hue as TEXT, and is the one solved for 4.5:1 on the surfaces
+             it can land on.
+   The old sheet used a single value for both, and since a fill has to be vivid, every
+   coloured *word* in the light theme failed: accent green on a white card measured
+   2.22:1, the PR badge 1.39:1, a tinted button label 1.95:1. Splitting them fixes that
+   class of bug outright rather than one component at a time.
 
-  /* text */
+   Fills also invert between themes — bright fill + black label in the dark theme, deep
+   fill + white label in the light one — so `--on-acc` is one declaration per theme
+   instead of a per-accent table of exceptions.
+
+   Every value here is generated and checked, not chosen by eye: hues are placed in
+   OKLCH (perceptually even, so eight accents carry equal weight) and lightness is
+   SOLVED against a contrast target. See index.css.test.js, which re-measures all of it. */
+:root {
+  /* surfaces — dark is the default. Not pure black: a faint cool cast lets a card sit
+     above the page on a hairline instead of relying on its fill alone, and it still
+     reads as black on an OLED panel. */
+  --bg:        #08090b;
+  --bg-el:     #101216;   /* elevated backdrop (sheets, bars) */
+  --surface:   #16181d;   /* card / grouped-list fill */
+  --surface-2: #20232a;   /* pressed + nested fill */
+  --surface-3: #2b2f38;   /* controls (segmented track, switch off) */
+
+  /* text — two legible tiers, not a fade to invisible. --label-4 is for SHAPES only
+     (the sheet grabber, an unchecked box's ring); nothing readable may use it. */
   --label:     #ffffff;
-  --label-2:   rgba(235,235,245,.60);
-  --label-3:   rgba(235,235,245,.32);
-  --label-4:   rgba(235,235,245,.18);
+  --label-2:   rgba(235,238,245,.65);
+  --label-3:   rgba(235,238,245,.51);
+  --label-4:   rgba(235,238,245,.20);
 
   /* lines */
-  --sep:       rgba(84,84,88,.60);
-  --sep-op:    rgba(84,84,88,.34);   /* for edges sitting over blur */
+  --sep:       rgba(140,148,168,.30);
+  --sep-op:    rgba(140,148,168,.22);   /* for edges sitting over blur */
   --hair:      .5px;
+  /* A card on a near-black page needs an edge, not just a lighter fill. Borrowed from
+     darwin-ui's --shadow-sm, which pairs a 1px light ring with the drop shadow. */
+  --ring:      inset 0 0 0 .5px rgba(255,255,255,.07);
+  --lift:      0 1px 2px rgba(0,0,0,.30), 0 8px 24px -12px rgba(0,0,0,.55);
 
-  /* system palette (iOS dark values) */
-  --blue:#0a84ff; --green:#30d158; --red:#ff453a; --orange:#ff9f0a;
-  --yellow:#ffd60a; --teal:#40c8e0; --indigo:#5e5ce6; --pink:#ff375f;
-  --purple:#bf5af2; --mint:#63e6e2; --brown:#ac8e68; --grey:#8e8e93;
+  /* palette — fill / ink / pressed.
+     On a dark surface a fill this light is already 5.4:1 or better as text (the worst of
+     the eight is pink on --surface-3), so ink and fill are the same colour here and the
+     accent keeps its full vividness. Only the light theme has to pull them apart. */
+  --green:#4bc957;  --green-ink:var(--green);  --green-2:#1fa836;
+  --blue:#54b3fd;   --blue-ink:var(--blue);    --blue-2:#0593e6;
+  --orange:#fa8927; --orange-ink:var(--orange);--orange-2:#d16e0d;
+  --yellow:#c9a90c; --yellow-ink:var(--yellow);--yellow-2:#a58a07;
+  --teal:#0cc3c3;   --teal-ink:var(--teal);    --teal-2:#19a0a0;
+  --purple:#b296ff; --purple-ink:var(--purple);--purple-2:#9670ec;
+  --pink:#fe799d;   --pink-ink:var(--pink);    --pink-2:#e44d7d;
+  --red:#fe7f78;    --red-ink:var(--red);      --red-2:#e9504d;
+  --grey:#8b93a3;
 
   /* accent (per-account, synced) */
   --acc:  var(--green);
-  --acc-2:#248a3d;
+  --acc-ink: var(--green-ink);
+  --acc-2: var(--green-2);
   --on-acc:#000000;
-  --acc-soft: color-mix(in srgb, var(--acc) 16%, transparent);
-  --acc-line: color-mix(in srgb, var(--acc) 38%, transparent);
+  --acc-soft: color-mix(in srgb, var(--acc) 18%, transparent);
+  --acc-line: color-mix(in srgb, var(--acc) 40%, transparent);
 
   /* geometry */
   --r-sm:8px; --r:12px; --r-lg:16px; --r-xl:22px; --r-card:14px;
@@ -62,48 +105,47 @@
 }
 
 :root[data-theme="light"] {
-  --bg:        #f2f2f7;
-  --bg-el:     #f7f7fa;
+  --bg:        #f4f5f7;
+  --bg-el:     #fafbfc;
   --surface:   #ffffff;
-  --surface-2: #ececef;
-  --surface-3: #e3e3e8;
+  --surface-2: #eceef1;
+  --surface-3: #e2e5ea;
 
-  --label:     #000000;
-  --label-2:   rgba(60,60,67,.60);
-  --label-3:   rgba(60,60,67,.30);
-  --label-4:   rgba(60,60,67,.16);
+  --label:     #0a0b0d;
+  --label-2:   rgba(22,24,30,.72);
+  --label-3:   rgba(22,24,30,.62);
+  --label-4:   rgba(22,24,30,.18);
 
-  --sep:       rgba(60,60,67,.29);
-  --sep-op:    rgba(60,60,67,.20);
+  --sep:       rgba(22,24,30,.16);
+  --sep-op:    rgba(22,24,30,.12);
+  --ring:      inset 0 0 0 .5px rgba(22,24,30,.07);
+  --lift:      0 1px 2px rgba(22,24,30,.05), 0 8px 24px -14px rgba(22,24,30,.20);
 
-  --blue:#007aff; --green:#34c759; --red:#ff3b30; --orange:#ff9500;
-  --yellow:#ffcc00; --teal:#30b0c7; --indigo:#5856d6; --pink:#ff2d55;
-  --purple:#af52de; --mint:#00c7be; --brown:#a2845e; --grey:#8e8e93;
-  --acc-2:#248a3d;
+  /* Deep fills, so the white label on them clears the bar on every accent. */
+  --green:#098926;  --green-ink:#00721b;  --green-2:#02721c;
+  --blue:#037ac0;   --blue-ink:#0b659f;   --blue-2:#02629c;
+  --orange:#b75f0b; --orange-ink:#984e05; --orange-2:#8d4908;
+  --yellow:#8b7404; --yellow-ink:#73600a; --yellow-2:#6e5c09;
+  --teal:#168383;   --teal-ink:#076d6d;   --teal-2:#086b6c;
+  --purple:#855dd7; --purple-ink:#6f4cb7; --purple-2:#683eb6;
+  --pink:#cf386b;   --pink-ink:#b32e5c;   --pink-2:#ac064f;
+  --red:#d33a3c;    --red-ink:#b52f30;    --red-2:#b00a1d;
+  --grey:#6b7280;
+
   --on-acc:#ffffff;
 }
 
-/* accents — Apple's system colours, so a recolour never looks off-system */
-:root[data-accent="lime"]  { --acc:var(--green);  --acc-2:#248a3d; --on-acc:#000 }
-:root[data-accent="sky"]   { --acc:var(--blue);   --acc-2:#0060df; --on-acc:#fff }
-:root[data-accent="orange"]{ --acc:var(--orange); --acc-2:#c76b00; --on-acc:#000 }
-:root[data-accent="violet"]{ --acc:var(--purple); --acc-2:#8944ab; --on-acc:#fff }
-:root[data-accent="pink"]  { --acc:var(--pink);   --acc-2:#d70036; --on-acc:#fff }
-:root[data-accent="red"]   { --acc:var(--red);    --acc-2:#d70015; --on-acc:#fff }
-:root[data-accent="teal"]  { --acc:var(--teal);   --acc-2:#0071a4; --on-acc:#000 }
-:root[data-accent="gold"]  { --acc:var(--yellow); --acc-2:#b25000; --on-acc:#000 }
-/* Label colour on a filled accent button is picked per accent by measured contrast,
-   not by taste. Button text is 17px/600, so the AA bar is 3:1 (large text). White on
-   the light-theme green is 2.22:1 and on teal 2.57:1 — both fail, and green is the
-   DEFAULT accent, so every primary button in light mode was failing. Black scores
-   9.46 / 8.16 there. Blue, purple, pink and red keep white (3.5–4.1:1), which both
-   passes and matches the platform convention. */
-:root[data-theme="light"][data-accent="lime"],
-:root[data-theme="light"][data-accent="teal"]  { --on-acc:#000 }
-:root[data-theme="light"][data-accent="sky"],
-:root[data-theme="light"][data-accent="violet"],
-:root[data-theme="light"][data-accent="pink"],
-:root[data-theme="light"][data-accent="red"]   { --on-acc:#fff }
+/* Accents are plain aliases of the palette above, so each one follows its theme with no
+   per-accent exceptions. The KEYS are persisted per profile and synced — renaming one
+   would silently reset somebody's colour, so they stay as they are. */
+:root[data-accent="lime"]  { --acc:var(--green);  --acc-ink:var(--green-ink);  --acc-2:var(--green-2) }
+:root[data-accent="sky"]   { --acc:var(--blue);   --acc-ink:var(--blue-ink);   --acc-2:var(--blue-2) }
+:root[data-accent="orange"]{ --acc:var(--orange); --acc-ink:var(--orange-ink); --acc-2:var(--orange-2) }
+:root[data-accent="violet"]{ --acc:var(--purple); --acc-ink:var(--purple-ink); --acc-2:var(--purple-2) }
+:root[data-accent="pink"]  { --acc:var(--pink);   --acc-ink:var(--pink-ink);   --acc-2:var(--pink-2) }
+:root[data-accent="red"]   { --acc:var(--red);    --acc-ink:var(--red-ink);    --acc-2:var(--red-2) }
+:root[data-accent="teal"]  { --acc:var(--teal);   --acc-ink:var(--teal-ink);   --acc-2:var(--teal-2) }
+:root[data-accent="gold"]  { --acc:var(--yellow); --acc-ink:var(--yellow-ink); --acc-2:var(--yellow-2) }
 
 /* ---------------------------------------------------------------- reset -- */
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -123,7 +165,7 @@ body{
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;letter-spacing:inherit}
 input,select,textarea{font:inherit;color:var(--label);letter-spacing:inherit}
 img{max-width:100%}
-a{color:var(--acc);text-decoration:none}
+a{color:var(--acc-ink);text-decoration:none}
 :focus{outline:none}
 :focus-visible{outline:2.5px solid var(--acc);outline-offset:2px;border-radius:6px}
 button,.chip,.tile,.item,.wday,.cal-d,.swatch,.hm-c,.lrow,.seg button,.stp button,.sld
@@ -151,7 +193,7 @@ button,.chip,.tile,.item,.wday,.cal-d,.swatch,.hm-c,.lrow,.seg button,.stp butto
 
 .muted{color:var(--label-2)} .dim{color:var(--label-3)}
 .small{font-size:13px;line-height:1.38}
-.accent{color:var(--acc)}
+.accent{color:var(--acc-ink)}
 .capitalize{text-transform:capitalize}
 /* exercise names and body-part/equipment terms arrive lowercase from the dataset,
    so tags and chips capitalise by default. Anything that is a unit or a sentence opts
@@ -183,7 +225,7 @@ body.resting #app{padding-bottom:calc(250px + var(--sab))}
   transition:background var(--fast),transform var(--fast);
 }
 .iconbtn:active{background:var(--surface-2);transform:scale(.92)}
-.iconbtn.on-ss{background:var(--acc-soft);color:var(--acc)}
+.iconbtn.on-ss{background:var(--acc-soft);color:var(--acc-ink)}
 
 h4.sec{
   font-size:13px;font-weight:400;letter-spacing:-.004em;color:var(--label-2);
@@ -201,7 +243,7 @@ h4.sec{
 /* ----------------------------------------------------------------- card -- */
 .card{
   background:var(--surface);border-radius:var(--r-card);
-  padding:16px;margin-bottom:12px;
+  padding:16px;margin-bottom:12px;box-shadow:var(--ring);
 }
 .card .big{font-size:30px;font-weight:600;letter-spacing:-.026em;line-height:1.1}
 
@@ -211,7 +253,7 @@ h4.sec{
   font-size:13px;font-weight:400;color:var(--label-2);
   letter-spacing:-.004em;padding:0 4px 7px;display:block;
 }
-.sect-b{background:var(--surface);border-radius:var(--r-card);overflow:hidden}
+.sect-b{background:var(--surface);border-radius:var(--r-card);overflow:hidden;box-shadow:var(--ring)}
 .sect-f{font-size:13px;color:var(--label-2);padding:7px 4px 0;line-height:1.38}
 
 .lrow{
@@ -228,7 +270,7 @@ h4.sec{
 .lrow-i{
   width:29px;height:29px;border-radius:7px;flex:none;font-size:18px;
   display:flex;align-items:center;justify-content:center;
-  background:var(--tint,var(--acc));color:#fff;
+  background:var(--tint,var(--acc));color:var(--on-acc);
 }
 .lrow-m{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
 .lrow-t{font-size:17px;letter-spacing:-.012em;line-height:1.25}
@@ -239,8 +281,8 @@ h4.sec{
 .lrow-v{color:var(--label-2);font-size:17px;letter-spacing:-.012em;flex:0 1 auto;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
 .lrow-c{color:var(--label);font-size:15px;flex:none;--icon-stroke:2.4}
-.lrow-k{color:var(--acc);font-size:17px;flex:none;--icon-stroke:2.4}
-.lrow.danger,.lrow.danger .lrow-t{color:var(--red)}
+.lrow-k{color:var(--acc-ink);font-size:17px;flex:none;--icon-stroke:2.4}
+.lrow.danger,.lrow.danger .lrow-t{color:var(--red-ink)}
 /* an (i) before a row's control: painted small and dim so the control stays the loud thing,
    but with a finger-sized target like everything else — the padding is the hit area and the
    vertical negative margin keeps it from making the row taller. The horizontal ones pull the
@@ -262,9 +304,9 @@ h4.sec{
 .btn:active{transform:scale(.975)}
 .btn.primary{background:var(--acc);color:var(--on-acc)}
 .btn.primary:active{background:var(--acc-2)}
-.btn.tinted{background:var(--acc-soft);color:var(--acc)}
-.btn.danger{background:color-mix(in srgb,var(--red) 15%,transparent);color:var(--red)}
-.btn.ghost,.btn.plain{background:none;color:var(--acc);font-weight:400}
+.btn.tinted{background:var(--acc-soft);color:var(--acc-ink)}
+.btn.danger{background:color-mix(in srgb,var(--red) 15%,transparent);color:var(--red-ink)}
+.btn.ghost,.btn.plain{background:none;color:var(--acc-ink);font-weight:400}
 .btn.ghost:active,.btn.plain:active{background:var(--surface-2)}
 .btn.sm{padding:8px 14px;width:auto;font-size:15px;border-radius:var(--r-sm);gap:5px}
 .btn.sm .icn{font-size:16px}
@@ -292,7 +334,7 @@ h4.sec{
    fade on the <svg> instead of in the stroke colour flattens the icon first and
    fades it as one shape — and it does that for every icon, not just this one. */
 #tabbar button .icn{font-size:25px;--icon-stroke:1.65;color:var(--label)}
-#tabbar button.on{color:var(--acc)}
+#tabbar button.on{color:var(--acc-ink)}
 #tabbar button.on .icn{--icon-stroke:2;color:inherit;opacity:1}
 #tabbar button.start{margin-top:-24px}
 #tabbar button.start .cir{
@@ -303,14 +345,14 @@ h4.sec{
 }
 #tabbar button.start:active .cir{transform:scale(.93)}
 #tabbar button.start .cir .icn{font-size:26px;--icon-stroke:2;color:inherit;opacity:1}
-#tabbar button.start span{color:var(--acc);font-weight:600}
+#tabbar button.start span{color:var(--acc-ink);font-weight:600}
 /* `.cir` is itself a <span>, so the label rules above and below reach it too and
    outrank the `.cir` block — which is how the running state ended up painting an
    orange play glyph onto an orange disc. Both states restate their own colour.
    The disc is orange in either theme, so its glyph is black, not `--on-acc`. */
 #tabbar button.start .cir{color:var(--on-acc)}
 #tabbar button.start.rec .cir{background:var(--orange);color:#000;box-shadow:0 6px 18px -4px color-mix(in srgb,var(--orange) 55%,transparent)}
-#tabbar button.start.rec span{color:var(--orange)}
+#tabbar button.start.rec span{color:var(--orange-ink)}
 #tabbar button.start.rec .cir::after{
   content:'';position:absolute;inset:0;border-radius:50%;
   border:2px solid var(--orange);animation:ping 1.9s var(--ease) infinite;
@@ -341,7 +383,7 @@ h4.sec{
 .item{
   display:flex;align-items:center;gap:12px;background:var(--surface);
   border-radius:var(--r-card);padding:10px 12px;min-height:60px;
-  transition:background var(--fast);text-align:left;width:100%;
+  transition:background var(--fast);text-align:left;width:100%;box-shadow:var(--ring);
 }
 .item:active{background:var(--surface-2)}
 .thumb{width:50px;height:50px;border-radius:9px;object-fit:cover;background:#fff;flex:none}
@@ -358,7 +400,7 @@ h4.sec{
   color:var(--label-2);border-radius:6px;padding:3px 7px;font-size:12px;
   font-weight:500;text-transform:capitalize;
 }
-.tag.acc{background:var(--acc-soft);color:var(--acc)}
+.tag.acc{background:var(--acc-soft);color:var(--acc-ink)}
 
 /* ---------------------------------------------------------------- chips -- */
 .chips{
@@ -585,16 +627,16 @@ h4.sec{
 /* why the next target is what it is (issue #17) */
 .progline{
   display:flex;align-items:flex-start;gap:7px;margin:6px 0 2px;
-  font-size:13px;line-height:1.38;color:var(--acc);
+  font-size:13px;line-height:1.38;color:var(--acc-ink);
 }
-.progline.warn{color:var(--yellow)}
+.progline.warn{color:var(--yellow-ink)}
 .progline svg{flex:none;margin-top:2px}
 
 /* start a timed set (issue #16) — sits where you'd otherwise reach for the checkbox */
 .setrow .setgo{
   width:30px;height:30px;border-radius:50%;flex:none;
   display:flex;align-items:center;justify-content:center;
-  background:var(--surface-2);color:var(--acc);font-size:14px;
+  background:var(--surface-2);color:var(--acc-ink);font-size:14px;
   transition:background var(--fast),opacity var(--fast);
 }
 .setrow .setgo:disabled{opacity:.3;cursor:default}
@@ -614,7 +656,7 @@ h4.sec{
   backdrop-filter:saturate(180%) blur(24px);-webkit-backdrop-filter:saturate(180%) blur(24px);
   border-radius:var(--r-lg);padding:12px 14px;
   display:flex;align-items:center;gap:12px;
-  box-shadow:0 12px 34px -8px rgba(0,0,0,.55);
+  box-shadow:var(--lift),var(--ring);
   animation:slideup var(--med) var(--ease);
 }
 @keyframes slideup{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
@@ -632,7 +674,7 @@ h4.sec{
 /* work timer (issue #16): the same bar doing the opposite job — outlined and tinted so a
    glance tells "you are holding this" apart from "you are recovering". */
 #timer.working{border:var(--hair) solid var(--acc)}
-#timer.working .t{color:var(--acc)}
+#timer.working .t{color:var(--acc-ink)}
 #timer.working .grow{flex:1;min-width:0}
 #timer.working .lbl{
   font-size:12px;color:var(--label-2);margin-bottom:5px;text-transform:capitalize;
@@ -662,7 +704,7 @@ h4.sec{
 .center{
   position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
   width:min(84vw,300px);background:var(--bg-el);border-radius:var(--r-lg);padding:20px;
-  box-shadow:0 20px 60px -12px rgba(0,0,0,.5);
+  box-shadow:var(--lift),var(--ring);
   animation:pop .28s var(--ease);
 }
 :root[data-theme="light"] .center{background:#fff}
@@ -673,7 +715,7 @@ h4.sec{
    tabular columns you can read straight down, and the words take whatever is left. Built out
    of the same grouped-list parts as the rest of the app (surface fill, inset hairlines) rather
    than a real <table>, so it inherits the card look and wraps properly on a narrow phone. */
-.efftbl{background:var(--surface);border-radius:var(--r-lg);overflow:hidden;margin:14px 0 12px}
+.efftbl{background:var(--surface);border-radius:var(--r-lg);overflow:hidden;margin:14px 0 12px;box-shadow:var(--ring)}
 .efftbl .r{display:flex;align-items:center;gap:10px;padding:10px 14px;position:relative}
 .efftbl .r+.r::before{
   content:'';position:absolute;left:14px;right:0;top:0;height:var(--hair);background:var(--sep);
@@ -691,7 +733,7 @@ h4.sec{
 }
 /* the row a working set usually lands on — the anchor the others are read against */
 .efftbl .r.on{background:var(--acc-soft)}
-.efftbl .r.on .n{color:var(--acc)}
+.efftbl .r.on .n{color:var(--acc-ink)}
 .efftbl .r.on .f{color:var(--label)}
 
 /* --- glyph picker (replaces the emoji grid) --- */
@@ -793,11 +835,11 @@ h4.sec{
 .stat-v{font-size:26px;font-weight:600;letter-spacing:-.026em;line-height:1.1}
 .mchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
 .mchip{font-size:12px;padding:4px 9px;border-radius:99px;background:var(--surface-2);color:var(--label-2)}
-.mchip.miss{background:color-mix(in srgb,var(--orange) 16%,transparent);color:var(--orange)}
+.mchip.miss{background:color-mix(in srgb,var(--orange) 16%,transparent);color:var(--orange-ink)}
 
 /* --- stat tiles --- */
 .tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
-.tile{background:var(--surface);border-radius:var(--r-card);padding:14px}
+.tile{background:var(--surface);border-radius:var(--r-card);padding:14px;box-shadow:var(--ring)}
 .tile .l{
   color:var(--label-2);font-size:13px;font-weight:400;letter-spacing:-.004em;
   text-transform:none;display:flex;align-items:center;gap:5px;
@@ -809,7 +851,7 @@ h4.sec{
 /* --- PR badge --- */
 .pr{
   display:inline-flex;align-items:center;gap:4px;
-  background:color-mix(in srgb,var(--yellow) 18%,transparent);color:var(--yellow);
+  background:color-mix(in srgb,var(--yellow) 18%,transparent);color:var(--yellow-ink);
   border-radius:6px;padding:3px 8px;font-size:12px;font-weight:500;
 }
 .pr .icn{font-size:13px}
@@ -845,8 +887,8 @@ h4.sec{
   font-weight:400;font-size:15px;color:var(--label);transition:background var(--fast);
 }
 .cal-d:active{background:var(--surface-2)}
-.cal-d.has{background:var(--acc-soft);color:var(--acc)}
-.cal-d.today{box-shadow:inset 0 0 0 1.8px var(--acc)}
+.cal-d.has{background:var(--acc-soft);color:var(--acc-ink)}
+.cal-d.today{box-shadow:inset 0 0 0 1.8px var(--acc),var(--ring)}
 .cal-d i{width:5px;height:5px;border-radius:50%;background:transparent}
 .cal-d i.done{background:var(--acc)}
 .cal-d i.plan{background:var(--label-3)}
@@ -863,20 +905,20 @@ h4.sec{
 /* --- supersets --- */
 .ss-label{
   font-size:12px;font-weight:600;letter-spacing:-.004em;text-transform:none;
-  color:var(--acc);margin:8px 0 5px 4px;display:flex;align-items:center;gap:5px;
+  color:var(--acc-ink);margin:8px 0 5px 4px;display:flex;align-items:center;gap:5px;
 }
 .ss-label .icn{font-size:13px}
-.item.in-ss{box-shadow:inset 3px 0 0 var(--acc)}
+.item.in-ss{box-shadow:inset 3px 0 0 var(--acc),var(--ring)}
 .ss-card{
   border-radius:var(--r-lg);padding:14px;
   background:var(--surface);box-shadow:inset 0 0 0 1.5px var(--acc-line);
 }
 .ss-hd{
-  font-size:12px;font-weight:600;color:var(--acc);margin-bottom:12px;
+  font-size:12px;font-weight:600;color:var(--acc-ink);margin-bottom:12px;
   text-align:center;display:flex;align-items:center;justify-content:center;gap:5px;
 }
 .ss-ex{position:relative}
-.ss-amp{text-align:center;font-size:15px;font-weight:600;color:var(--acc);margin:14px 0 8px}
+.ss-amp{text-align:center;font-size:15px;font-weight:600;color:var(--acc-ink);margin:14px 0 8px}
 
 /* --- home: today's session row --- */
 .today-row{
