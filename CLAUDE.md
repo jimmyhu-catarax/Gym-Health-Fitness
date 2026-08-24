@@ -1,7 +1,17 @@
+> At the start of every session, read `SESSION_SETUP.md` and follow it before doing anything else.
+
 # Gym-Health-Fitness
 
 A self-hosted gym, body-weight and health tracker. React 19 + Vite PWA frontend, a small
 Node passkey/push API, Capacitor shells for Android/iOS, all behind `docker compose up`.
+
+**This fork is its own product**, not a personal instance and not a staging area for upstream
+PRs. It is free to diverge from openGym, which means two things a session should act on rather
+than tiptoe around: upstream branding is *wrong here* and gets replaced as we touch it (README
+badges, `docs/SELF_HOSTING.md`'s clone URL and `SECURITY.md`'s release process still point at
+`DuarteSantos8/openGym`), and the prebuilt images in `docker-compose.yml` are upstream's, so
+they eventually need to be fork-owned or dropped. None of that licenses a drive-by rewrite —
+open an issue, do it deliberately.
 
 This file records what a session **cannot** work out by reading the code. Layout, dependencies
 and the standard build commands are deliberately not here — `ls`, the manifests and `--help`
