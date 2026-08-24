@@ -1,0 +1,55 @@
+name: tests
+
+# Pushes to main plus every PR. Deliberately not "every push": a branch with an open PR
+# would otherwise run the whole suite twice for the same commit.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Floor is 22.5, not 20: sqlite.test.js and import-health.test.js build their
+        # fixtures with the built-in node:sqlite, so anything older fails for a reason
+        # that has nothing to do with the code under test.
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+
+      # The application currently lives in an unmerged PR, so main does not have frontend/
+      # yet. Without this the job would fail on any ref that predates that merge — including
+      # the PR that adds this very workflow. Reporting success on a ref with nothing to test
+      # is honest and lets main require this check from day one; once the app has landed on
+      # main the guard is always true and can be deleted.
+      - id: app
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No frontend/ on this ref — nothing to test."
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.app.outputs.present == 'true'
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # There is no package.json at the repo root — everything npm lives in frontend/.
+      - if: steps.app.outputs.present == 'true'
+        working-directory: frontend
+        run: npm ci
+
+      - if: steps.app.outputs.present == 'true'
+        working-directory: frontend
+        run: npm test
+
+      - if: steps.app.outputs.present == 'true'
+        working-directory: frontend
+        run: npm run build
