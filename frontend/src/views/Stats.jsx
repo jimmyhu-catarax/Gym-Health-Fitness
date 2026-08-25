@@ -1,11 +1,11 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { EXIDX } from '../lib/exercises.js'
 import { lastBW, streakWeeks, setLabel, modeOf, effortOf } from '../lib/history.js'
 import { fmtNum, fmtDate, fmtVol, todayISO, weekKey } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
-import { bwSheet, goalSheet, calendarSheet, workoutDetailSheet, WorkoutRow, bwDeltaColor, fitnessAgeSheet } from '../sheets.jsx'
+import { bwSheet, goalSheet, calendarSheet, workoutDetailSheet, WorkoutRow, bwDeltaColor, fitnessAgeSheet, importFromApp } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
 import Heatmap from '../components/Heatmap.jsx'
 import Icon from '../components/Icon.jsx'
@@ -18,6 +18,7 @@ import {
 } from '../lib/effort.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
 import { fitnessAgeReport, nameResolver } from '../lib/fitness-age.js'
+import { metricsSummary, fmtDuration, STAGE_FILL, STAGE_NAME } from '../lib/metrics.js'
 
 // Which muscles the training in a window actually hit — and, the point of the card,
 // which ones it keeps missing. Shading is relative within the window (lib/muscles.js).
@@ -218,6 +219,137 @@ function FitnessAgeCard({ S }) {
   </div>
 }
 
+// The Whoop half of the interface: how recovered you are, how you slept, how hard the day
+// was. Fed by S.metrics (imported) and lib/physiology.js (computed for the days Whoop did
+// not score).
+//
+// Two things this card refuses to do, both for the same reason — an absent number and a bad
+// one look identical once they reach a chart:
+//
+//   It never prints the newest row under "Today". An export describes the days up to when it
+//   was taken, so between imports the freshest row gets older while looking exactly as fresh.
+//   Every figure carries how many days back it is.
+//
+//   It never draws a stage breakdown whose slices do not sum to the night. That identity is
+//   also the import's correctness check (see sleepBreakdown), so a broken sum means a column
+//   was matched to the wrong metric, and a plausible-looking chart is the worst outcome.
+const ZONE_INK = { green: 'var(--green-ink)', yellow: 'var(--yellow-ink)', red: 'var(--red-ink)' }
+const ZONE_FILL = { green: 'var(--green)', yellow: 'var(--yellow)', red: 'var(--red)' }
+
+/** "today" / "yesterday" / "3 days ago" — the age has to travel with the number. */
+function Age({ days }) {
+  if (days == null) return null
+  const s = days === 0 ? t('today') : days === 1 ? t('yesterday') : t('{0} days ago', days)
+  return <span className="dim"> · {s}</span>
+}
+
+/** A trend against your own recent baseline, coloured by whether it is good news. */
+function Delta({ trend, unit = '' }) {
+  if (!trend || trend.delta === 0) return null
+  const col = trend.better > 0 ? 'var(--green-ink)' : trend.better < 0 ? 'var(--red-ink)' : 'var(--label-2)'
+  return <span className="small" style={{ color: col }}>
+    {(trend.delta > 0 ? '+' : '') + fmtNum(trend.delta)}{unit}
+  </span>
+}
+
+function RecoveryCard({ S }) {
+  const [range, setRange] = useState(30)
+  const fileRef = useRef(null)
+  const sum = useMemo(() => metricsSummary(S, { days: range }), [S.metrics, range])
+
+  // The same hidden input Settings uses. Kept here rather than sending someone to Settings
+  // and back: the empty state is the moment they want to import, and the confirm sheet in
+  // sheets.jsx still stands between the file and anything being written.
+  const picker = <input ref={fileRef} type="file" style={{ display: 'none' }}
+    accept=".csv,.xml,.json,.zip,.db,text/csv,text/xml,application/json,application/zip"
+    onChange={ev => { const f = ev.target.files[0]; if (f) importFromApp(f); ev.target.value = '' }} />
+
+  if (!sum.ok) {
+    return <div className="card">
+      <div className="row between"><h3>{t('Recovery & sleep')}</h3><Icon name="heart" /></div>
+      <div className="muted small" style={{ lineHeight: 1.5, marginTop: 4 }}>
+        {t('Sleep, recovery and strain from your Whoop band. Export your data from the Whoop app (More → Data Export) and drop the zip in here — sleep and recovery arrive alongside your workouts.')}
+      </div>
+      <div style={{ height: 12 }} />
+      <Button variant="primary" icon="download" onClick={() => fileRef.current?.click()}>{t('Import Whoop data')}</Button>
+      {picker}
+    </div>
+  }
+
+  const { recovery, sleep, strain, hrv, rhr } = sum
+  const bd = sleep && sleep.breakdown
+
+  return <div className="card">
+    <div className="row between">
+      <h3>{t('Recovery & sleep')}</h3>
+      <Segmented className="seg-range" value={range} onChange={setRange}
+        options={[{ value: 7, label: '1W' }, { value: 30, label: '1M' }, { value: 90, label: '3M' }]} />
+    </div>
+
+    {recovery && <>
+      <div className="row" style={{ gap: 18, alignItems: 'baseline', marginTop: 8 }}>
+        <div style={{ fontSize: 44, fontWeight: 700, lineHeight: 1, color: ZONE_INK[recovery.zone] }}>
+          {Math.round(recovery.pct)}<span style={{ fontSize: 22 }}>%</span>
+        </div>
+        <div className="muted small" style={{ lineHeight: 1.45 }}>
+          {t('Recovery')}<Age days={recovery.stale} /><br />
+          <Delta trend={recovery.trend} unit="%" />
+          {recovery.trend && <span className="dim"> {t('vs your {0}-day average', recovery.trend.n)}</span>}
+        </div>
+      </div>
+      {/* Whoop saw beat-to-beat data this app never gets, so a computed score is a fallback
+          and says so rather than passing for the real thing. */}
+      {recovery.src === 'computed' && <div className="muted small" style={{ marginTop: 6, lineHeight: 1.4 }}>
+        <Icon name="info" /> {t('Worked out from your HRV and resting heart rate against your own 28-day baseline — Whoop did not score this day.')}
+      </div>}
+    </>}
+
+    <div className="row between" style={{ marginTop: 12 }}>
+      {hrv && <div><div className="l muted small">{t('HRV')}</div>
+        <div><b>{fmtNum(hrv.value)}</b> <span className="muted small">ms</span> <Delta trend={hrv} /></div></div>}
+      {rhr && <div><div className="l muted small">{t('Resting HR')}</div>
+        <div><b>{fmtNum(rhr.value)}</b> <span className="muted small">bpm</span> <Delta trend={rhr} /></div></div>}
+      {strain && <div><div className="l muted small">{t('Day strain')}</div>
+        <div><b>{fmtNum(strain.value)}</b> <span className="muted small">/ 21</span> <Delta trend={strain.trend} /></div></div>}
+    </div>
+
+    {sleep && sleep.dur != null && <>
+      <h4 className="sec">{t('Last night')}<Age days={sleep.stale} /></h4>
+      <div className="row between">
+        <span><b style={{ fontSize: 20 }}>{fmtDuration(sleep.dur)}</b>
+          {sleep.need && <span className="muted small"> {t('of {0} needed', fmtDuration(sleep.need))}</span>}</span>
+        {sleep.perf != null && <span className="muted small">{Math.round(sleep.perf)}% {t('performance')}</span>}
+      </div>
+      {bd && <>
+        <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', marginTop: 8, gap: 2 }}>
+          {bd.stages.map(s => <div key={s.k} style={{ width: s.pct + '%', background: STAGE_FILL[s.k] }} />)}
+        </div>
+        <div className="row" style={{ gap: 14, marginTop: 6, flexWrap: 'wrap' }}>
+          {bd.stages.map(s => <span key={s.k} className="muted small">
+            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: STAGE_FILL[s.k], marginRight: 5 }} />
+            {t(STAGE_NAME[s.k])} {fmtDuration(s.min)}
+          </span>)}
+        </div>
+      </>}
+    </>}
+
+    {sum.series.recovery.length > 1 && <>
+      <h4 className="sec">{t('Recovery trend')}</h4>
+      <div className="chart">
+        <LineChart points={sum.series.recovery} h={140} unit="%"
+          color={recovery ? ZONE_FILL[recovery.zone] : 'var(--acc)'} />
+      </div>
+    </>}
+
+    {sum.stale > 2 && <div className="muted small" style={{ marginTop: 8, lineHeight: 1.4 }}>
+      <Icon name="info" /> {t('Your last import covers up to {0}. Import a fresh export to bring this up to date.', fmtDate(sum.latest.d, true))}
+      <div style={{ height: 8 }} />
+      <Button size="sm" icon="download" onClick={() => fileRef.current?.click()}>{t('Import Whoop data')}</Button>
+    </div>}
+    {picker}
+  </div>
+}
+
 export default function Stats() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
@@ -292,6 +424,8 @@ export default function Stats() {
       <div className="tile"><div className="l"><Icon name="flame" />{t('Week streak')}</div><div className="v">{streakWeeks(S)}</div></div>
       <div className="tile"><div className="l"><Icon name="scale" />{t('Weight 30d')}</div><div className="v" style={{ fontSize: 22, color: bwDelta30 === null ? 'inherit' : bwDeltaColor(bwDelta30, (lastBW(S) || {}).w || 0) }}>{bwDelta30 === null ? '—' : (bwDelta30 > 0 ? '+' : '') + fmtNum(bwDelta30) + ' ' + S.unit}</div></div>
     </div>
+
+    <RecoveryCard S={S} />
 
     <FitnessAgeCard S={S} />
 

@@ -43,7 +43,7 @@ is worse than none — it misleads with authority, which ad-hoc rediscovery at l
 
 # Project Environment Record
 
-_Last updated: 2026-08-25 (after PR #8, fitness age, merged)_
+_Last updated: 2026-08-25 (recovery & sleep card; loop running)_
 
 ## Static — only recompute when the project's needs actually change
 
@@ -65,33 +65,32 @@ _Last updated: 2026-08-25 (after PR #8, fitness age, merged)_
 
 ## Dynamic — the only part that should change often
 
-- **Last session:** added **fitness age** (Stats → Fitness age) — VO2max read back against the
-  HUNT3 population curve as the age at which it would be average, estimated from a measured
-  value, else a qualifying logged run (Daniels & Gilbert VDOT), else resting heart rate (Uth).
-  Pure helpers in `lib/fitness-age.js` with 60 tests asserting against the *published* reference
-  points, not the module's own output. See `docs/FITNESS_AGE.md`. Earlier: the openGym base
-  import, the fill-vs-ink colour rework, the Google Fit / Health Connect / Whoop importers,
-  `CLAUDE.md`, this file and CI. **PRs #1, #2, #3, #7 and #8 are all merged**; main is green on
-  Node 22 and 24, 668 tests.
-- **Open:** no PRs. Three issues, all of them consequences of the fork-goal decision:
-  **#4** every "report a problem" path still routes to upstream's tracker — including the
-  security advisory link, so a hole in *our* code gets filed against someone who doesn't run it;
-  **#5** `docker compose up` starts upstream's prebuilt images, so the documented first run
-  silently boots the wrong app; **#6** the product name, which blocks the cosmetic half of #4.
-- **Next step:** enable branch protection on `main` requiring the `tests` check. **This is
-  owner-only — a session cannot do it**, it's a repository settings change. Until it happens CI
-  is advisory: the workflow runs on every PR, but nothing stops a red one being merged. After
-  that, #5 first — it is a correctness bug, the other two are cosmetic until someone other than
-  the owner runs this.
+- **Last session:** the Whoop half. `lib/whoop-metrics.js` reads `sleeps.csv` and
+  `physiological_cycles.csv` into the daily `S.metrics` series; `lib/physiology.js` derives
+  strain (Banister TRIMP) and recovery (rolling z-score of ln rMSSD + resting HR) for the days
+  Whoop did not score; `lib/metrics.js` selects it for display; a **Recovery & sleep** card in
+  Stats shows it. Before that: fitness age, and `docker compose` fixed to build from source.
+  **PRs #1, #2, #3, #7, #8, #9 and #11 are merged.** 793 tests.
+- **Open:** issues **#4** (repo links route bug reports and security advisories to upstream),
+  **#6** (product name), **#10** (whether to publish fork-owned images), **#12** (the Whoop /
+  OpenStrap survey — licences, verbatim CSV schemas, API reference; *extend it, do not
+  re-survey*).
+- **Next step:** the training↔recovery cross-analysis — joining the lifting log to `S.metrics`
+  is the one thing neither Hevy nor Whoop does alone, and it is what the merged interface is
+  *for*. Then sleep and strain trends, then the import hardening listed in #12.
+- **An autonomous `/loop` is driving this**, self-paced, one reviewable increment per firing.
+  Its stop-and-ask triggers are new dependencies, incompatible licences, architectural forks
+  (BLE via a native Capacitor plugin vs Web Bluetooth is the canonical one), anything medical,
+  and schema changes to persisted user JSON.
 - **Decisions to revisit:**
-  - Fork goal set to *divergent product* (2026-08-24). Its consequences now live in #4/#5/#6
-    rather than here, so this line stays only as the record of *why* those issues exist. Nothing
-    about them touches `LICENSE` or `NOTICE.md` — a fork may take its own name, it may not drop
-    its provenance.
+  - Fork goal set to *divergent product* (2026-08-24); consequences live in #4/#6/#10.
   - Fitness age prefers a logged run over the resting-heart-rate estimate **even when the run
-    reads lower**, because a run is a floor and the ratio method is known to read high for
-    untrained people. The visible consequence: logging an easy run can *worsen* your displayed
-    fitness age. It is deliberate, documented and shown on the card — and it is the call in that
-    feature most likely to draw a complaint, so it is written down rather than rediscovered.
-  - The fitness-age strings are English-only in all 12 locales. That is the documented i18n
-    fallback, not a bug, but `src/locales/*.js` is where it gets fixed if anyone wants it.
+    reads lower**, so logging an easy run can *worsen* your displayed age. Deliberate — the
+    ratio method reads high for untrained people and taking the larger number would bias
+    upward every time — but counterintuitive enough that someone will file it as a bug.
+  - Whoop nights are dated by **`Wake onset`**, not `Cycle start time`. A cycle runs sleep
+    onset to sleep onset, so cycle-start dating shifts every recovery score a day early. If a
+    number ever disagrees with the Whoop app by one day, this is why.
+  - Recovery computed from HRV never overwrites a score Whoop supplied; `recoverySrc` marks
+    which is which, because they are different quantities and must not be one series.
+  - New strings are English-only in all 12 locales — the documented i18n fallback, not a bug.
