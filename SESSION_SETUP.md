@@ -75,7 +75,9 @@ _Last updated: 2026-08-25 (recovery & sleep card; loop running)_
   **#6** (product name), **#10** (whether to publish fork-owned images), **#12** (the Whoop /
   OpenStrap survey — licences, verbatim CSV schemas, API reference; *extend it, do not
   re-survey*).
-- **Next step:** sleep and strain trend detail, then the import hardening listed in #12. The
+- **Next step:** sleep and strain trend detail. The import hardening from #12 is done —
+  RFC 4180 was already handled by `parseCSV`, `__MACOSX` skipping is covered by a test, and
+  BOM-aware decoding plus a kind-aware emptiness guard landed with `lib/import-file.js`. The
   training↔recovery cross-analysis (`lib/training-recovery.js`) has landed — it is the thing
   neither Hevy nor Whoop does alone, and what the merged interface is *for*.
 - **Blocked on a decision:** BLE ingestion straight from the band. A PWA cannot drive Whoop's

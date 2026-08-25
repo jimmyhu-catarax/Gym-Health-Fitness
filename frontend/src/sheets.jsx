@@ -18,6 +18,7 @@ import { loadOfWorkouts } from './lib/muscles.js'
 import { parseImport, mergeImport } from './lib/import-csv.js'
 import { parseArchive, parseHealthText } from './lib/import-health.js'
 import { mergeIntoMetrics } from './lib/whoop-metrics.js'
+import { decodeText, importIsEmpty } from './lib/import-file.js'
 import { unzip, looksLikeZip } from './lib/unzip.js'
 import { buildPlanBundle, parsePlan, mergePlan, printPlan } from './lib/plan-share.js'
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
@@ -356,7 +357,9 @@ export async function importFromApp(file, onDone) {
     if (looksLikeZip(buf)) {
       parsed = await parseArchive(await unzip(buf), opts)
     } else {
-      const text = new TextDecoder().decode(buf)
+      // BOM-aware: an Excel "Save as -> Unicode text" round-trip produces UTF-16, which
+      // decoded as UTF-8 is mojibake that matches no header, so a good export gets refused.
+      const text = decodeText(buf)
       parsed = parseImport(text, opts)
       if (parsed.error) {
         const health = parseHealthText(text, opts)
@@ -373,9 +376,10 @@ export async function importFromApp(file, onDone) {
   }
   if (parsed.error === 'unreadable-db') { toast(t("That Health Connect database couldn't be read")); return }
   if (parsed.error) { toast(t("That file's columns aren't recognised — see the docs for supported apps.")); return }
-  if (parsed.kind === 'bodyweight' ? !parsed.bodyweight.length : !parsed.workouts.length) {
-    toast(t('Nothing to import from that file')); return
-  }
+  // Kind-aware, and outside the try/catch above: the old form assumed anything that was not
+  // body weight carried `workouts`, so a physiology-only Whoop export read `.length` off
+  // undefined and threw where nothing was catching.
+  if (importIsEmpty(parsed)) { toast(t('Nothing to import from that file')); return }
   ui().openSheet(close => <ImportSummary parsed={parsed} close={close} />)
   onDone && onDone()
 }
