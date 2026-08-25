@@ -224,7 +224,20 @@ export function recoveryFor(metrics, date, { window = RECOVERY_WINDOW } = {}) {
   if (!Array.isArray(metrics) || !metrics.length) return null
   const i = metrics.findIndex(m => m.d === date)
   if (i < 0) return null
+  return recoveryAt(metrics, i, window)
+}
+
+/**
+ * The same thing by index, for callers already walking the series.
+ *
+ * Going through recoveryFor means a findIndex per day, and withComputedRecovery calls it once
+ * per day — quadratic, which is invisible on the 40-day fixtures this was built against and
+ * very much not on six years of real history. The window keeps each call bounded, so skipping
+ * the search is the whole difference between O(n²) and O(n).
+ */
+function recoveryAt(metrics, i, window = RECOVERY_WINDOW) {
   const today = metrics[i]
+  if (!today) return null
   const prior = metrics.slice(Math.max(0, i - window), i)
   return recoveryScore({
     hrv: today.hrv,
@@ -244,9 +257,10 @@ export function recoveryFor(metrics, date, { window = RECOVERY_WINDOW } = {}) {
  */
 export function withComputedRecovery(metrics, opts = {}) {
   if (!Array.isArray(metrics)) return []
+  const window = opts.window || RECOVERY_WINDOW
   return metrics.map((m, i) => {
     if (m.recovery != null) return { ...m, recoverySrc: 'whoop' }
-    const r = recoveryFor(metrics, m.d, opts)
+    const r = recoveryAt(metrics, i, window)
     return r ? { ...m, recovery: r.pct, recoverySrc: 'computed', recoveryZ: r.z } : { ...m }
   })
 }
