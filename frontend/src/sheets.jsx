@@ -17,6 +17,7 @@ import BodyMap from './components/BodyMap.jsx'
 import { loadOfWorkouts } from './lib/muscles.js'
 import { parseImport, mergeImport } from './lib/import-csv.js'
 import { parseArchive, parseHealthText } from './lib/import-health.js'
+import { mergeIntoMetrics } from './lib/whoop-metrics.js'
 import { unzip, looksLikeZip } from './lib/unzip.js'
 import { buildPlanBundle, parsePlan, mergePlan, printPlan } from './lib/plan-share.js'
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
@@ -216,21 +217,49 @@ export function fitnessAgeSheet() {
 // the one action where "just try it" is expensive — it's someone's entire training
 // history — so the numbers, the unit conversion and the exercises we couldn't recognise
 // are all on screen before the confirm button.
+/* What each field in a daily metrics row is called on screen. Keys are the storage names
+   from lib/whoop-metrics.js; anything unmapped falls back to its key rather than vanishing,
+   so a metric added later shows up as itself instead of silently not appearing. */
+const METRIC_LABEL = {
+  recovery: 'Recovery', hrv: 'HRV', rhr: 'Resting HR', spo2: 'Blood oxygen', skinTemp: 'Skin temp',
+  strain: 'Strain', kcal: 'Energy', maxHr: 'Max HR', avgHr: 'Avg HR',
+  sleepPerf: 'Sleep performance', sleepEff: 'Sleep efficiency', sleepCons: 'Sleep consistency',
+  sleepDur: 'Time asleep', inBed: 'Time in bed', sleepNeed: 'Sleep need', sleepDebt: 'Sleep debt',
+  rem: 'REM', deep: 'Deep', light: 'Light', awake: 'Awake', respRate: 'Respiratory rate',
+}
+const metricLabel = k => t(METRIC_LABEL[k] || k)
+
 function ImportSummary({ parsed, close }) {
   const st = useStore(s => s.S)
   const isBW = parsed.kind === 'bodyweight'
-  const have = isBW
-    ? parsed.bodyweight.filter(b => st.bodyweight.some(x => x.d === b.d)).length
-    : parsed.workouts.filter(w => st.workouts.some(x => x.d === w.d)).length
-  const fresh = (isBW ? parsed.bodyweight.length : parsed.workouts.length) - have
+  const isMetrics = parsed.kind === 'metrics'
+  // A Whoop export carries physiology *and* workouts, so metrics can either be the whole
+  // import or ride along on one. Both paths report their own day counts.
+  const metrics = Array.isArray(parsed.metrics) ? parsed.metrics : []
+  const metricHave = metrics.filter(m => (st.metrics || []).some(x => x.d === m.d)).length
+  const metricFresh = metrics.length - metricHave
+  const fields = parsed.fields || [...new Set(metrics.flatMap(Object.keys))]
+    .filter(k => !['d', 't', 'src'].includes(k))
+
+  const have = isMetrics ? metricHave
+    : isBW ? parsed.bodyweight.filter(b => st.bodyweight.some(x => x.d === b.d)).length
+      : parsed.workouts.filter(w => st.workouts.some(x => x.d === w.d)).length
+  const fresh = isMetrics ? metricFresh
+    : (isBW ? parsed.bodyweight.length : parsed.workouts.length) - have
 
   const doImport = () => {
-    let res
-    update(s => { res = mergeImport(s, parsed) })
+    let res = { added: 0 }
+    update(s => {
+      // Physiology merges the same way a weigh-in does: a day already present is left alone,
+      // so re-importing an overlapping export cannot overwrite good data with a partial
+      // re-read of it.
+      if (metrics.length) s.metrics = mergeIntoMetrics(s.metrics, metrics).metrics
+      if (!isMetrics) res = mergeImport(s, parsed)
+    })
     close()
-    toast(isBW
-      ? t('{0} weigh-ins imported', res.added)
-      : t('{0} workouts imported', res.added))
+    toast(isMetrics ? t('{0} days of health data imported', metricFresh)
+      : isBW ? t('{0} weigh-ins imported', res.added)
+        : t('{0} workouts imported', res.added))
   }
 
   return <>
@@ -240,7 +269,10 @@ function ImportSummary({ parsed, close }) {
     </div>
 
     <div className="tiles" style={{ textAlign: 'left' }}>
-      {isBW ? <>
+      {isMetrics ? <>
+        <div className="tile"><div className="l">{t('Days')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{metrics.length}</div></div>
+        <div className="tile"><div className="l">{t('New')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{metricFresh}</div></div>
+      </> : isBW ? <>
         <div className="tile"><div className="l">{t('Weigh-ins')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{parsed.bodyweight.length}</div></div>
         <div className="tile"><div className="l">{t('New')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{fresh}</div></div>
       </> : <>
@@ -251,12 +283,27 @@ function ImportSummary({ parsed, close }) {
       </>}
     </div>
 
+    {fields.length > 0 && <>
+      <h4 className="sec">{t('Health data found')}</h4>
+      <div className="mchips" style={{ marginBottom: 10 }}>
+        {fields.map(k => <span key={k} className="mchip">{metricLabel(k)}</span>)}
+      </div>
+      {/* Whoop's columns are not published, so the importer matches them by keyword and then
+          checks the values. Naming what it recognised is the user's chance to spot a column
+          read as the wrong metric — this is the last screen before anything is written. */}
+      <div className="small dim" style={{ marginBottom: 10 }}>
+        {t('Each night is filed under the day you woke up, which is how a recovery score is meant to be read.')}
+      </div>
+    </>}
+    {!isMetrics && metrics.length > 0 && <div className="small dim" style={{ marginBottom: 10 }}>
+      {t('{0} days of sleep and recovery came in the same export and will be imported too.', metricFresh)}
+    </div>}
     {parsed.mixedUnits ? <div className="small" style={{ color: 'var(--yellow-ink)', marginBottom: 10 }}>
       {t('The file mixes kg and lb — each set is converted to {0}.', st.unit)}
     </div> : parsed.converted ? <div className="small" style={{ color: 'var(--yellow-ink)', marginBottom: 10 }}>
       {t('The file is in {0} and your profile is in {1} — weights will be converted.', parsed.fileUnit, st.unit)}
     </div> : null}
-    {!isBW && !parsed.fileUnit && !parsed.mixedUnits && <div className="small dim" style={{ marginBottom: 10 }}>
+    {!isBW && !isMetrics && !parsed.fileUnit && !parsed.mixedUnits && <div className="small dim" style={{ marginBottom: 10 }}>
       {t('The file does not say which unit it uses — numbers are imported as they are.')}
     </div>}
     {/* Health Connect's schema isn't published, so the importer works out which column is
@@ -270,13 +317,13 @@ function ImportSummary({ parsed, close }) {
     </div>}
     {/* The file rated its sets. Say so: the column is off by default, so the ratings would
         otherwise arrive invisibly and look like they had been dropped. */}
-    {!isBW && (parsed.rirSets + parsed.rpeSets) > 0 && <div className="small dim" style={{ marginBottom: 10 }}>
+    {!isBW && !isMetrics && (parsed.rirSets + parsed.rpeSets) > 0 && <div className="small dim" style={{ marginBottom: 10 }}>
       {t(effortOf(st) === 'none'
         ? '{0} sets bring an {1} with them — switch on Effort per set in Settings to see it.'
         : '{0} sets bring an {1} with them.',
       parsed.rirSets || parsed.rpeSets, parsed.rirSets ? 'RIR' : 'RPE')}
     </div>}
-    {!isBW && parsed.unmatchedNames.length > 0 && <>
+    {!isBW && !isMetrics && parsed.unmatchedNames.length > 0 && <>
       <h4 className="sec">{t('Not in the library — added as your own exercises')}</h4>
       <div className="mchips" style={{ marginBottom: 12 }}>
         {parsed.unmatchedNames.slice(0, 12).map(n => <span key={n} className="mchip capitalize">{n}</span>)}
