@@ -38,6 +38,42 @@ npx cap open ios            # opens Xcode (Mac only) → set your signing team, 
 `npm run build:mobile` bakes the CDN media base into the bundle and copies the web build
 into both native projects — re-run it after every web-code change before building natively.
 
+### Android without Android Studio
+
+Studio is the comfortable path, not the required one. An APK can be built from a bare Linux
+box with nothing but a JDK, which is what makes this work on a CI runner or in a container:
+
+```sh
+# 1. SDK command-line tools (~150 MB), unpacked so sdkmanager sits at cmdline-tools/latest/
+export ANDROID_HOME=$HOME/android-sdk
+mkdir -p "$ANDROID_HOME/cmdline-tools"
+curl -sSLo clt.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+unzip -q clt.zip -d "$ANDROID_HOME/cmdline-tools"
+mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+
+# 2. Licences, then the packages this project's variables.gradle asks for
+yes | sdkmanager --licenses
+sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+# 3. Build. Gradle fetches its own distribution on first run.
+cd frontend && npm run build:mobile
+cd android && ./gradlew assembleDebug
+# -> app/build/outputs/apk/debug/app-debug.apk
+```
+
+The result is signed with Android's standard *debug* key, which is enough to sideload onto
+your own phone and nothing more: it is debuggable, every developer's machine holds the same
+key, and Android will not let a release-signed update install over it later. For anything you
+intend to keep, build a release APK with your own keystore instead — see
+[Distribution](#android--sideload-the-apk) below.
+
+Gradle may pull an extra `build-tools;34.0.0` of its own accord during the first build. That
+is a Capacitor plugin pinning an older version, not a mistake on your part.
+
+There is no equivalent headless path for iOS: `cap sync` skips `pod install` without
+CocoaPods and skips the clean step without `xcodebuild`, and both are Mac-only.
+
 > **Heads-up:** after `build:mobile`, `frontend/dist` contains the *mobile* bundle.
 > Run a plain `npm run build` again before deploying `dist` to a server.
 
