@@ -156,6 +156,14 @@ export function buildDemoState() {
     targetW: TARGET_W,
     // The history is rated, so the demo turns the column on and the stats get a scale to
     // label their aggregates with instead of guessing one (see displayScale).
-    effort: 'rir'
+    effort: 'rir',
+    // Fitness age inputs, so the demo shows the card computing rather than asking to be set
+    // up. Birth is relative to today for the same reason every other date here is: the demo
+    // person should still be 34 in five years, not 39.
+    birth: new Date(today.getFullYear() - 34, 2, 14).toISOString().slice(0, 10),
+    physSex: 'male',
+    // No run in this history, so the card falls back to the resting-heart-rate route — which
+    // also puts its "roughest of the three" caveat on screen, where it belongs.
+    restHr: 56
   }
 }

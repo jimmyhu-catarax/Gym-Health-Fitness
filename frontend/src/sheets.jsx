@@ -11,7 +11,7 @@ import { starterRoutines } from './lib/starter.js'
 import Media, { Thumb } from './components/Media.jsx'
 import Stepper from './components/Stepper.jsx'
 import Icon from './components/Icon.jsx'
-import { Button, Slider, Switch, Segmented, SelectRow, Row } from './components/ui.jsx'
+import { Button, Slider, Switch, Segmented, SelectRow, Row, NumberField } from './components/ui.jsx'
 import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
 import BodyMap from './components/BodyMap.jsx'
 import { loadOfWorkouts } from './lib/muscles.js'
@@ -22,6 +22,7 @@ import { buildPlanBundle, parsePlan, mergePlan, printPlan } from './lib/plan-sha
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
 import { MOBILE, shareExport } from './lib/mobile.js'
+import { chronoAge } from './lib/fitness-age.js'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -130,6 +131,84 @@ function BwSheet({ required, onDone, close }) {
 export function bwSheet(opts = {}) {
   const h = ui().openSheet(close => <BwSheet {...opts} close={close} />, { locked: !!opts.required })
   return h
+}
+
+/* ============================ fitness age ============================ */
+// The four inputs lib/fitness-age.js can use, and nothing else.
+//
+// Behind an explicit sheet because three of them are things this app has never asked for.
+// A profile that would rather not hand over a date of birth simply never sees a fitness
+// age — the card stays in its "what's missing" state instead of inventing defaults.
+function FitnessAgeSheet({ close }) {
+  const st = useStore(s => s.S)
+  const [birth, setBirth] = useState(st.birth || '')
+  const [sex, setSex] = useState(st.physSex || '')
+  const [hr, setHr] = useState(st.restHr ?? null)
+  const [vo2, setVo2] = useState(st.vo2max ?? null)
+  const age = chronoAge(birth || null)
+
+  const save = () => {
+    if (birth && age == null) { toast(t('Enter a date of birth between 13 and 100 years ago')); return }
+    if (hr && (hr < 30 || hr > 120)) { toast(t('Resting heart rate should be between 30 and 120 bpm')); return }
+    if (vo2 && (vo2 < 15 || vo2 > 90)) { toast(t('VO2max should be between 15 and 90 ml/kg/min')); return }
+    update(s => {
+      s.birth = birth || null
+      s.physSex = sex || null
+      s.restHr = hr || null
+      s.vo2max = vo2 || null
+    })
+    close()
+    toast(t('Fitness age updated'))
+  }
+
+  return <>
+    <h3>{t('Fitness age')}</h3>
+    <div className="muted small" style={{ lineHeight: 1.5 }}>
+      {t('Reads your cardiorespiratory fitness back as an age, by comparing it with population averages. It is a fitness estimate, not a medical measure of biological age.')}
+    </div>
+
+    <h4 className="sec">{t('Date of birth')}</h4>
+    <input type="date" className="field" value={birth} max={todayISO()}
+      onChange={e => setBirth(e.target.value)} />
+    <div className="muted small" style={{ marginTop: 6 }}>
+      {age != null ? t('Chronological age') + ': ' + Math.floor(age) : t('Needed to compare against anything.')}
+    </div>
+
+    <h4 className="sec">{t('Reference curve')}</h4>
+    <Segmented value={sex} onChange={setSex} options={[
+      { value: 'male', label: t('Male') },
+      { value: 'female', label: t('Female') },
+    ]} />
+    <div className="muted small" style={{ marginTop: 6, lineHeight: 1.45 }}>
+      {t('Average VO2max differs by about a quarter between the two curves, so this is asked separately from the body diagram in Settings rather than assumed from it.')}
+    </div>
+
+    <h4 className="sec">{t('Resting heart rate')} <span className="dim">({t('optional')})</span></h4>
+    <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+      <NumberField value={hr} onChange={setHr} decimal={false} nullable className="field" placeholder="—" style={{ width: 110, textAlign: 'center' }} />
+      <span className="muted small">bpm</span>
+    </div>
+    <div className="muted small" style={{ marginTop: 6, lineHeight: 1.45 }}>
+      {t('Your lowest daily reading, from a wearable or a 60-second count before getting up. Used only when there is no run to read instead.')}
+    </div>
+
+    <h4 className="sec">{t('Measured VO2max')} <span className="dim">({t('optional')})</span></h4>
+    <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+      <NumberField value={vo2} onChange={setVo2} nullable className="field" placeholder="—" style={{ width: 110, textAlign: 'center' }} />
+      <span className="muted small">ml/kg/min</span>
+    </div>
+    <div className="muted small" style={{ marginTop: 6, lineHeight: 1.45 }}>
+      {t('From a lab test or a watch that reports one. Overrides both estimates — a real measurement beats anything inferred from a log.')}
+    </div>
+
+    <div style={{ height: 16 }} />
+    <Button variant="primary" onClick={save}>{t('Save')}</Button>
+    <div style={{ height: 6 }} />
+    <Button variant="ghost" className="dim" onClick={close}>{t('Cancel')}</Button>
+  </>
+}
+export function fitnessAgeSheet() {
+  return ui().openSheet(close => <FitnessAgeSheet close={close} />)
 }
 
 /* ============================ import from another app ============================ */

@@ -15,7 +15,15 @@ export const DEF = {
   // that a profile which never chose (loaded state is overlaid on DEF, on every path: local,
   // server pull, backup import) still falls back to the `showRir` boolean this replaced and
   // keeps the column it had. See effortOf.
-  reminder: { on: false, time: '08:00', tz: null }, effort: null
+  reminder: { on: false, time: '08:00', tz: null }, effort: null,
+  // Fitness age inputs (lib/fitness-age.js). All null until the profile opts in — the card
+  // stays hidden rather than showing a number built on defaults.
+  //
+  // physSex is deliberately NOT the `body` field above. That one picks which muscle-map
+  // drawing to show; this one selects the HUNT3 population curve, where male and female
+  // means differ by about a quarter. Reading a diagram preference as a statement about
+  // physiology would move somebody's fitness age by more than a decade without asking.
+  birth: null, physSex: null, restHr: null, vo2max: null
 }
 const clone = o => JSON.parse(JSON.stringify(o))
 
