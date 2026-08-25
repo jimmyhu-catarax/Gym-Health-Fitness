@@ -107,7 +107,7 @@ you want it current — as often as weekly, if you look at it weekly.
 
 | What you see | What it means |
 | --- | --- |
-| *"That file's columns aren't recognised"* | No column resolved. If it is a genuine Whoop export, that is a bug worth reporting — attach the header line, not the file. |
+| *"Those columns didn't resolve"* | The importer shows the header it actually read and what each column resolved to. If it says nothing looked like a Whoop metric and this **is** a genuine export, that is a bug — tap **Copy what was read** and paste that into a report. It contains column names only, never your data. |
 | A metric you expected is missing from the chips | Its column resolved but its values failed the plausibility check, or your band does not record it (a 3.0 has no SpO2). |
 | *"Nothing new to import"* | Every day in the file is already present. Expected on a re-import. |
 | Recovery disagrees with the Whoop app by one day | Should not happen — a night is filed under the day you **woke up**, matching how Whoop scores it. If it is consistently off by one, report it. |

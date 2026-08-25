@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   parseWhoopMetricsCsv, mergeWhoopMetrics, mergeIntoMetrics, isWhoopMetrics, dayOf, METRICS,
+  diagnoseHeader,
 } from './whoop-metrics.js'
 
 /* Fixtures are written as real CSV text rather than pre-parsed objects, because the thing
@@ -365,5 +366,46 @@ describe('METRICS table', () => {
   it('puts the specific strain phrasing before the generic one', () => {
     // Order is load-bearing: a bare "strain" first would match Activity Strain.
     expect(METRICS.strain.cols[0]).toBe('day strain')
+  })
+})
+
+describe('diagnoseHeader', () => {
+  it('reports what a real header resolved to', () => {
+    const d = diagnoseHeader(REAL_CYCLES_HEADER.split(','))
+    expect(d.date).toBe('Wake onset')
+    expect(d.matched.map(m => m.key)).toContain('recovery')
+    expect(d.matched.find(m => m.key === 'hrv').column).toBe('Heart rate variability (ms)')
+    expect(d.matched.find(m => m.key === 'strain').column).toBe('Day Strain')
+  })
+
+  it('names the columns nothing claimed, which is where a missing metric hides', () => {
+    const d = diagnoseHeader(['Wake onset', 'Recovery score %', 'Some New Whoop Column'])
+    expect(d.unmatched).toEqual(['Some New Whoop Column'])
+  })
+
+  it('shows an unrecognised file resolving to nothing, so the user can tell the two faults apart', () => {
+    // A Whoop variant this importer has not met and a file that was never a Whoop export look
+    // identical from outside. Only one is worth reporting, so the diagnosis has to separate them.
+    const d = diagnoseHeader(['Date', 'Exercise', 'Weight', 'Reps'])
+    expect(d.matched).toEqual([])
+    expect(d.date).toBe('Date')      // matched as a date, but nothing physiological did
+  })
+
+  it('picks up energy through its unit-bearing header', () => {
+    expect(diagnoseHeader(['Wake onset', 'Energy burned (kJ)']).matched.map(m => m.key)).toContain('kcal')
+  })
+
+  it('does not double-count a column', () => {
+    const d = diagnoseHeader(REAL_CYCLES_HEADER.split(','))
+    const cols = d.matched.map(m => m.column)
+    expect(new Set(cols).size).toBe(cols.length)
+    expect(d.unmatched).not.toContain(d.date)
+  })
+
+  it('survives junk', () => {
+    for (const h of [null, undefined, [], ['']]) {
+      expect(() => diagnoseHeader(h)).not.toThrow()
+      expect(diagnoseHeader(h).matched).toEqual([])
+    }
   })
 })

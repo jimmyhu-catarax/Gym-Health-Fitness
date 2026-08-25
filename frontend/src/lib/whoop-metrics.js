@@ -246,6 +246,43 @@ export function mergeIntoMetrics(existing, incoming) {
   return { metrics: [...have.keys()].sort().map(d => have.get(d)), added, kept }
 }
 
+/**
+ * What a header line would and would not resolve to — for when an import fails.
+ *
+ * "That file's columns aren't recognised" is a dead end. It tells somebody holding a genuine
+ * export nothing about which of the two possible faults they have: a Whoop variant this
+ * importer has not met, or a file that was never a Whoop export. Both look identical from
+ * outside, and only one is worth reporting.
+ *
+ * So on failure the app shows the header it actually read and what each column resolved to.
+ * That turns a dead end into either an answer ("this is the wrong file") or a bug report good
+ * enough to act on without asking anyone to send their health data.
+ *
+ * @returns {{date: string|null, matched: Array, unmatched: string[], columns: string[]}}
+ */
+export function diagnoseHeader(header) {
+  const cols = Array.isArray(header) ? header.map(h => String(h ?? '')) : []
+  const dateIdx = findCol(cols, ...DATE_COLS)
+  const matched = []
+  const taken = new Set()
+  if (dateIdx >= 0) taken.add(dateIdx)
+
+  for (const [key, spec] of Object.entries(METRICS)) {
+    const i = findCol(cols, ...spec.cols)
+    if (i >= 0) { matched.push({ key, column: cols[i] }); taken.add(i) }
+  }
+  for (const spec of ENERGY_COLS) {
+    const i = findCol(cols, ...spec.cols)
+    if (i >= 0) { matched.push({ key: 'kcal', column: cols[i] }); taken.add(i); break }
+  }
+  return {
+    date: dateIdx >= 0 ? cols[dateIdx] : null,
+    matched,
+    unmatched: cols.filter((_, i) => !taken.has(i)),
+    columns: cols,
+  }
+}
+
 /** True if a CSV header looks like one of Whoop's physiological exports. */
 export function isWhoopMetrics(header) {
   if (findCol(header, ...DATE_COLS) < 0) return false

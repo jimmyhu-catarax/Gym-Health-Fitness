@@ -22,7 +22,7 @@
 
 import { parseCSV, parseWhen, matchExercise, norm, num, toMinutes, LB_TO_KG } from './import-csv.js'
 import { openSqlite, looksLikeSqlite } from './sqlite.js'
-import { parseWhoopMetricsCsv, mergeWhoopMetrics, isWhoopMetrics } from './whoop-metrics.js'
+import { parseWhoopMetricsCsv, mergeWhoopMetrics, isWhoopMetrics, diagnoseHeader } from './whoop-metrics.js'
 import { uid } from './format.js'
 
 /* ------------------------------------------------------------------ util -- */
@@ -441,11 +441,14 @@ export async function parseArchive(entries, opts = {}) {
     }
   }
 
-  // Nothing matched by name — sniff the CSVs for a header we recognise.
+  // Nothing matched by name — sniff the CSVs for a header we recognise, keeping what we saw
+  // so a failure can show its work rather than shrugging.
+  const seen = []
   for (const f of files.filter(e => e.name.endsWith('.csv'))) {
     const text = await f.text()
     const rows = parseCSV(text)
-    if (rows.length < 2) continue
+    if (rows.length < 2) { seen.push({ name: f.name, header: [], rows: rows.length }); continue }
+    seen.push({ name: f.name, header: rows[0], rows: rows.length - 1 })
     if (isWhoopWorkouts(rows[0])) {
       const parsed = parseWhoopWorkouts(text, opts)
       if (!parsed.error) return parsed
@@ -457,7 +460,7 @@ export async function parseArchive(entries, opts = {}) {
     const parsed = parseGoogleFitCsv(text, opts)
     if (!parsed.error) return parsed
   }
-  return { error: 'unrecognised' }
+  return { error: 'unrecognised', seen: seen.map(f => ({ ...f, whoop: diagnoseHeader(f.header) })) }
 }
 
 /** A loose CSV or JSON handed over on its own, rather than inside its archive. */
@@ -472,5 +475,9 @@ export function parseHealthText(text, opts = {}) {
     if (!parsed.error) return metricsResult(mergeWhoopMetrics([parsed]), 'Whoop')
     return parsed
   }
-  return parseGoogleFitCsv(s, opts)
+  const fit = parseGoogleFitCsv(s, opts)
+  if (fit.error === 'unrecognised') {
+    return { error: 'unrecognised', seen: [{ name: '', header: rows[0], rows: rows.length - 1, whoop: diagnoseHeader(rows[0]) }] }
+  }
+  return fit
 }

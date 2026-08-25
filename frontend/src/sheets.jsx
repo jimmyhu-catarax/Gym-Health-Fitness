@@ -340,6 +340,61 @@ function ImportSummary({ parsed, close }) {
   </>
 }
 
+
+/* ============================ import didn't resolve ============================ */
+/**
+ * What the importer actually read, when it could not make sense of a file.
+ *
+ * "That file's columns aren't recognised" is a dead end, and it hides the one distinction that
+ * matters: a genuine Whoop export in a shape this importer has not met, versus a file that was
+ * never a Whoop export. Both look identical from outside and only the first is a bug.
+ *
+ * So this shows the header line it read and what each column resolved to. Someone with the
+ * wrong file sees that immediately; someone with a real export gets a bug report good enough
+ * to act on — without anyone having to hand over their health data to get it looked at.
+ */
+function ImportDiagnosis({ seen, close }) {
+  const files = (seen || []).filter(f => f.header && f.header.length)
+  const report = files.map(f =>
+    `${f.name || 'file'} (${f.rows} rows)\n  ${f.header.join(', ')}`).join('\n\n')
+  return <>
+    <h3>{t("Those columns didn't resolve")}</h3>
+    <div className="muted small" style={{ lineHeight: 1.5 }}>
+      {t('Whoop does not publish its column names, so the importer matches them by keyword and checks the values. Here is what it read — if this is a genuine Whoop export, that is a bug worth reporting, and this is the part to include.')}
+    </div>
+
+    {files.map((f, i) => <div key={i} style={{ marginTop: 14 }}>
+      <h4 className="sec">{f.name || t('The file')} <span className="dim">· {t('{0} rows', f.rows)}</span></h4>
+      {f.whoop && f.whoop.matched.length > 0 ? <>
+        <div className="muted small" style={{ marginBottom: 6 }}>{t('Recognised:')}</div>
+        <div className="mchips" style={{ marginBottom: 10 }}>
+          {f.whoop.matched.map(m => <span key={m.key + m.column} className="mchip">{metricLabel(m.key)}</span>)}
+        </div>
+      </> : <div className="small" style={{ color: 'var(--yellow-ink)', marginBottom: 8 }}>
+        {t('Nothing in this file looked like a Whoop metric.')}
+      </div>}
+      {f.whoop && f.whoop.date && <div className="muted small" style={{ marginBottom: 8 }}>
+        {t('Dated by: {0}', f.whoop.date)}
+      </div>}
+      <div className="muted small" style={{ marginBottom: 4 }}>{t('Columns found:')}</div>
+      <div className="exnote" style={{ fontSize: 12, lineHeight: 1.5, wordBreak: 'break-word' }}>
+        {f.header.join(', ')}
+      </div>
+    </div>)}
+
+    <div style={{ height: 14 }} />
+    <Button icon="clipboard" onClick={() => {
+      // Clipboard access can be refused outright (permissions, insecure origin), and a failed
+      // copy that says nothing is worse than no button.
+      navigator.clipboard?.writeText(report)
+        .then(() => toast(t('Copied — paste it into a bug report')))
+        .catch(() => toast(t('Could not copy. Select the column list above instead.')))
+    }}>{t('Copy what was read')}</Button>
+    <div style={{ height: 6 }} />
+    <Button variant="ghost" className="dim" onClick={close}>{t('Close')}</Button>
+  </>
+}
+
 /**
  * Read an export and show what it would do.
  *
@@ -375,7 +430,14 @@ export async function importFromApp(file, onDone) {
     toast(t('No body-weight records found in that Health Connect backup')); return
   }
   if (parsed.error === 'unreadable-db') { toast(t("That Health Connect database couldn't be read")); return }
-  if (parsed.error) { toast(t("That file's columns aren't recognised — see the docs for supported apps.")); return }
+  if (parsed.error) {
+    // Show the work rather than shrugging: which fault this is, is not visible from outside.
+    if (parsed.seen && parsed.seen.some(f => f.header && f.header.length)) {
+      ui().openSheet(close => <ImportDiagnosis seen={parsed.seen} close={close} />)
+      return
+    }
+    toast(t("That file's columns aren't recognised — see the docs for supported apps.")); return
+  }
   // Kind-aware, and outside the try/catch above: the old form assumed anything that was not
   // body weight carried `workouts`, so a physiology-only Whoop export read `.length` off
   // undefined and threw where nothing was catching.
