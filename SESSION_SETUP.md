@@ -59,7 +59,11 @@ _Last updated: 2026-08-25 (recovery & sleep card; loop running)_
   `add-an-importer` skill capturing the refuse-don't-guess stance now living in module headers.
 - **Traps a cold session walks into.** `npm test` at the repo root fails — there is no root
   manifest, everything npm is in `frontend/`. Tests need Node ≥ 22.5 (`node:sqlite`).
-  `media/` and `data/` are absent by design, so `/img` and `/gif` 502 in dev. `docker compose
+  `media/` and `data/` are absent by design, so `/img` and `/gif` 502 in dev.
+  **Routing is hash-based** (`#/stats`, `#/workout`) — a plain `/stats` URL lands on Home,
+  which looks like a redirect and is really a 404 falling through. Driving the app in a
+  browser, set `location.hash`. The Start tab does not open the workout chooser either; it
+  dives straight into the weigh-in flow, so the chooser is `#/workout` with nothing active. `docker compose
   up` without `--build` runs upstream's images. There is no Tailwind — the CSS is hand-written.
   Adding a dependency is a hard sell, and two readers were hand-rolled to avoid one.
 
@@ -75,7 +79,8 @@ _Last updated: 2026-08-25 (recovery & sleep card; loop running)_
   **#6** (product name), **#10** (whether to publish fork-owned images), **#12** (the Whoop /
   OpenStrap survey — licences, verbatim CSV schemas, API reference; *extend it, do not
   re-survey*).
-- **Next step:** sleep and strain trend detail. The import hardening from #12 is done —
+- **Next step:** sleep and strain trend detail, then a `docs/` page for the recovery model.
+  Recovery now surfaces on the Start workout screen. The import hardening from #12 is done —
   RFC 4180 was already handled by `parseCSV`, `__MACOSX` skipping is covered by a test, and
   BOM-aware decoding plus a kind-aware emptiness guard landed with `lib/import-file.js`. The
   training↔recovery cross-analysis (`lib/training-recovery.js`) has landed — it is the thing
