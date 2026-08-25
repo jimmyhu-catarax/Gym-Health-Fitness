@@ -209,3 +209,32 @@ describe('the ramps stay ordered', () => {
     expect(L('var(--surface-3)')).toBeLessThan(L('var(--surface-2)'))
   })
 })
+
+describe('the PWA manifest', () => {
+  /* The manifest and the Capacitor config carry colours too, and they live outside CSS — so
+     the colour rework changed --bg and left them behind, and nothing noticed. On an installed
+     PWA that is the status bar and the splash screen not matching the app; on the native shell
+     it is the background behind the webview. Invisible in a browser tab, visible on a phone. */
+  const bg = /--bg:\s*(#[0-9a-fA-F]{6})/.exec(readFileSync(new URL('./index.css', import.meta.url), 'utf8'))[1]
+
+  it('paints its splash and status bar the same colour as the app', () => {
+    const m = JSON.parse(readFileSync(new URL('../public/manifest.json', import.meta.url), 'utf8'))
+    expect(m.theme_color.toLowerCase()).toBe(bg.toLowerCase())
+    expect(m.background_color.toLowerCase()).toBe(bg.toLowerCase())
+  })
+
+  it('gives the native shell the same background', () => {
+    const c = JSON.parse(readFileSync(new URL('../capacitor.config.json', import.meta.url), 'utf8'))
+    expect(c.backgroundColor.toLowerCase()).toBe(bg.toLowerCase())
+  })
+
+  it('still declares what iOS needs to install it to the home screen', () => {
+    const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8')
+    expect(html).toMatch(/apple-mobile-web-app-capable"\s+content="yes"/)
+    expect(html).toMatch(/rel="apple-touch-icon"/)
+    expect(html).toMatch(/rel="manifest"/)
+    const m = JSON.parse(readFileSync(new URL('../public/manifest.json', import.meta.url), 'utf8'))
+    expect(m.display).toBe('standalone')
+    expect(m.icons.some(i => i.sizes === '180x180')).toBe(true)
+  })
+})

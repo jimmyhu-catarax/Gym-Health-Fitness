@@ -148,6 +148,44 @@ export function buildDemoState() {
     dayPlan[tIso] = order[(order.findIndex(r => r.name === lastName) + 1) % order.length].id
   }
 
+  // Physiology, correlated with the training above rather than sprinkled on top.
+  //
+  // Without this the demo shows the Whoop half in its empty state, which makes the whole
+  // recovery feature invisible to anybody trying the app — and the Training & recovery card
+  // exists precisely to show a relationship, so seeding independent noise would demonstrate
+  // the opposite of the point. So recovery dips the morning after a session, strain rises on
+  // days that had one, and sleep runs a little shorter after the heavier days.
+  //
+  // It is fabricated, and the demo profile is the one place in this app where that is the
+  // honest thing to do: everything here is invented history, clearly labelled as a demo, and
+  // an example that shows nothing teaches nothing.
+  const trainedOn = new Set(workouts.map(w => w.d))
+  const metrics = []
+  for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
+    const day = new Date(d)
+    const iso = isoOf(day)
+    const prev = new Date(day); prev.setDate(prev.getDate() - 1)
+    const afterTraining = trainedOn.has(isoOf(prev))
+    const wave = Math.sin((day - start) / (86400000 * 9)) * 0.5 + (rnd() - 0.5) * 0.6
+
+    const recovery = Math.max(12, Math.min(97, Math.round(
+      68 + wave * 14 - (afterTraining ? 11 : 0))))
+    const hrv = Math.round((48 + wave * 9 - (afterTraining ? 5 : 0)) * 10) / 10
+    const rhr = Math.round(52 - wave * 3 + (afterTraining ? 2 : 0))
+    const strain = Math.round((trainedOn.has(iso) ? 13.5 + wave * 3 : 6.5 + wave * 2) * 10) / 10
+    const light = Math.round(214 + wave * 20 - (afterTraining ? 6 : 0))
+    const deep = Math.round(97 + wave * 14)
+    const rem = Math.round(110 + wave * 16)
+    metrics.push({
+      d: iso, t: at(day, 7, 15), src: 'Whoop',
+      recovery, hrv, rhr, strain,
+      sleepDur: light + deep + rem, light, deep, rem,
+      awake: Math.round(36 - wave * 6), sleepNeed: 486,
+      sleepPerf: Math.max(40, Math.min(100, Math.round(87 + wave * 9))),
+      sleepEff: Math.max(50, Math.min(100, Math.round(91 + wave * 4))),
+    })
+  }
+
   return {
     routines: [push, pull, legs],
     week: { 1: push.id, 3: pull.id, 5: legs.id },
@@ -164,6 +202,7 @@ export function buildDemoState() {
     physSex: 'male',
     // No run in this history, so the card falls back to the resting-heart-rate route — which
     // also puts its "roughest of the three" caveat on screen, where it belongs.
-    restHr: 56
+    restHr: 56,
+    metrics
   }
 }

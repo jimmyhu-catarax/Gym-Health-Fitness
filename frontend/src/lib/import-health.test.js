@@ -244,6 +244,45 @@ describe('parseArchive', () => {
     ])
     expect(out.source).toBe('Whoop')
     expect(out.workouts).toHaveLength(1)
+    // The physiology rides along on the same result: it came out of the same zip and
+    // describes the same days, so it must not become a second import to run by hand.
+    expect(out.metrics).toHaveLength(1)
+    expect(out.metrics[0]).toMatchObject({ d: '2024-03-07', sleepPerf: 88, recovery: 64 })
+  })
+
+  it('takes the physiology on its own when the export has no workouts', async () => {
+    const out = await parseArchive([
+      entry('my_whoop_data/physiological_cycles.csv',
+        'Cycle start time,Recovery score %,Heart rate variability (ms),Day Strain\n' +
+        '2024-03-07 03:00:00,64,44.1,12.0\n2024-03-08 03:00:00,71,49.8,7.4\n'),
+    ])
+    expect(out.kind).toBe('metrics')
+    expect(out.source).toBe('Whoop')
+    expect(out.days).toBe(2)
+    expect(out.from).toBe('2024-03-07')
+    expect(out.to).toBe('2024-03-08')
+    expect(out.fields.sort()).toEqual(['hrv', 'recovery', 'strain'])
+  })
+
+  it('joins a day split across the two physiology files', async () => {
+    // Strain lives in one file and the sleep detail in the other. Stopping at the first
+    // match would silently drop half of every day.
+    const out = await parseArchive([
+      entry('my_whoop_data/physiological_cycles.csv',
+        'Cycle start time,Recovery score %,Day Strain\n2024-03-07 03:00:00,64,12.0\n'),
+      entry('my_whoop_data/sleeps.csv',
+        'Cycle start time,Asleep duration (min),REM duration (min)\n2024-03-07 03:00:00,441,92\n'),
+    ])
+    expect(out.metrics[0]).toMatchObject({ d: '2024-03-07', recovery: 64, strain: 12, sleepDur: 441, rem: 92 })
+  })
+
+  it('recognises a renamed physiology export by its header', async () => {
+    const out = await parseArchive([
+      entry('export/data-2.csv',
+        'Cycle start time,Recovery score %,Resting heart rate (bpm)\n2024-03-07 03:00:00,64,52\n'),
+    ])
+    expect(out.kind).toBe('metrics')
+    expect(out.metrics[0].rhr).toBe(52)
   })
 
   it('prefers the per-weigh-in JSON over the daily roll-up', async () => {

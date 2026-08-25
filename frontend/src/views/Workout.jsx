@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
@@ -14,8 +14,42 @@ import Icon from '../components/Icon.jsx'
 import { Button, Check, NumberField } from '../components/ui.jsx'
 import { nextPrescription, applyPrescription } from '../lib/progression.js'
 import { glyphOf } from '../lib/glyphs.js'
+import { readinessFor } from '../lib/readiness.js'
+import { ZONE_INK } from '../lib/metrics.js'
 
 /* ---------- start chooser (no active workout) ---------- */
+/**
+ * How recovered you were this morning, on the screen where you choose what to lift.
+ *
+ * The point of merging the two apps, in one row: Hevy knows what you lifted, Whoop knows how
+ * you slept, and the decision they both feed gets made right here.
+ *
+ * It reports and does not prescribe — lib/readiness.js says why at length. Briefly: the
+ * progression engine already sets load from logged performance, and a second opinion bolted
+ * to the front of it would leave nobody able to tell which system moved their weights.
+ *
+ * Renders nothing when the newest score is more than a day old. Next to "Start workout" a
+ * stale number reads as a statement about today.
+ */
+function ReadinessStrip() {
+  const S = useStore(s => s.S)
+  const r = useMemo(() => readinessFor(S), [S.metrics])
+  if (!r) return null
+  return <div className="card" style={{ marginBottom: 10 }}>
+    <div className="row between" style={{ alignItems: 'baseline' }}>
+      <span className="row" style={{ gap: 9, alignItems: 'baseline' }}>
+        <b style={{ fontSize: 30, lineHeight: 1, color: ZONE_INK[r.zone] }}>
+          {r.pct}<span style={{ fontSize: 16 }}>%</span></b>
+        <span className="muted small">{t('Recovery')}{r.stale === 1 ? ' · ' + t('yesterday') : ''}</span>
+      </span>
+      {r.trend && r.trend.delta !== 0 && <span className="small muted">
+        {(r.trend.delta > 0 ? '+' : '') + fmtNum(r.trend.delta)}% {t('vs your usual')}
+      </span>}
+    </div>
+    <div className="muted small" style={{ marginTop: 5, lineHeight: 1.4 }}>{t(r.note)}</div>
+  </div>
+}
+
 function StartChooser() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
@@ -24,6 +58,7 @@ function StartChooser() {
   const others = S.routines.filter(r => r !== todayR)
   return <div className="narrow">
     <div className="hdr"><div><h1>{t('Start workout')}</h1><div className="sub">{t(DAYN[new Date().getDay()])} — {todayR ? t('today is {0}', todayR.name) : t('rest day, but no one’s stopping you')}</div></div></div>
+    <ReadinessStrip />
     {todayR && <div className="card" style={{ borderColor: 'var(--acc)' }}>
       <h2 className="accent">{t("Today's plan")}{todayOvr ? ' · ' + t('rescheduled') : ''}</h2>
       <div className="row between" style={{ marginBottom: 12 }}>
