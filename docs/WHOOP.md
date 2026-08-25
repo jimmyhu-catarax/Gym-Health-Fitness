@@ -6,6 +6,18 @@ a band on your wrist to numbers on your own screen.
 You do not need a Whoop subscription for the import — the data export is available to any
 account, including a lapsed one.
 
+## 0. See it working first, without exporting anything
+
+`VITE_DEMO=1 npm run dev` from `frontend/`, or any build of the demo, boots a guest profile
+with twelve weeks of invented training **and** matching physiology. Every recovery surface is
+populated — the card, the trends, the training-vs-recovery join, the strip on Start workout —
+so you can see what the feature does before deciding whether to hand it your own data. It is
+also the fastest way to check the app on a phone: install it to the home screen and look.
+
+The history is fabricated and the app says so. It is correlated on purpose — recovery dips the
+morning after a session — because a demo of a feature that exists to surface a relationship
+has to contain one.
+
 ## 1. Get your data out of Whoop
 
 In the Whoop app: **More → Account settings → Data export → Download my data**.

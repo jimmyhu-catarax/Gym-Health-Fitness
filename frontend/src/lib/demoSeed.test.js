@@ -107,3 +107,59 @@ describe('demo seed — effort', () => {
     expect(flat(b)).toBe(flat(S))
   })
 })
+
+describe('demo physiology', () => {
+  const S = buildDemoState()
+
+  it('seeds a metrics series, so the Whoop half is visible without an import', () => {
+    // Without this the demo shows every recovery surface in its empty state, and the feature
+    // is invisible to anyone trying the app on a phone.
+    expect(S.metrics.length).toBeGreaterThan(80)
+    expect(S.metrics[0]).toHaveProperty('recovery')
+    expect(S.metrics[0]).toHaveProperty('sleepDur')
+    expect(S.metrics[0]).toHaveProperty('strain')
+  })
+
+  it('keeps one row per day, sorted, like a real import', () => {
+    const dates = S.metrics.map(m => m.d)
+    expect(dates).toEqual([...dates].sort())
+    expect(new Set(dates).size).toBe(dates.length)
+  })
+
+  it('keeps every value inside its physiological range', () => {
+    for (const m of S.metrics) {
+      expect(m.recovery).toBeGreaterThanOrEqual(1)
+      expect(m.recovery).toBeLessThanOrEqual(100)
+      expect(m.strain).toBeGreaterThanOrEqual(0)
+      expect(m.strain).toBeLessThanOrEqual(21)
+      expect(m.hrv).toBeGreaterThan(0)
+      expect(m.rhr).toBeGreaterThan(25)
+    }
+  })
+
+  it('keeps the sleep arithmetic self-consistent, as a real export would', () => {
+    for (const m of S.metrics) expect(m.light + m.deep + m.rem).toBe(m.sleepDur)
+  })
+
+  it('actually correlates recovery with training, which is what the card exists to show', () => {
+    // Seeding independent noise would demonstrate the opposite of the point: the Training &
+    // recovery card is there to surface a relationship, so the demo has to contain one.
+    const trained = new Set(S.workouts.map(w => w.d))
+    const after = [], rested = []
+    for (let i = 1; i < S.metrics.length; i++) {
+      (trained.has(S.metrics[i - 1].d) ? after : rested).push(S.metrics[i].recovery)
+    }
+    const mean = a => a.reduce((x, y) => x + y, 0) / a.length
+    expect(after.length).toBeGreaterThan(10)
+    expect(rested.length).toBeGreaterThan(10)
+    expect(mean(after)).toBeLessThan(mean(rested))
+  })
+
+  it('puts more strain on days that had a session', () => {
+    const trained = new Set(S.workouts.map(w => w.d))
+    const on = S.metrics.filter(m => trained.has(m.d)).map(m => m.strain)
+    const off = S.metrics.filter(m => !trained.has(m.d)).map(m => m.strain)
+    const mean = a => a.reduce((x, y) => x + y, 0) / a.length
+    expect(mean(on)).toBeGreaterThan(mean(off))
+  })
+})
