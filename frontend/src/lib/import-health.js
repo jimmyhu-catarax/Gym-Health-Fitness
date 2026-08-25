@@ -27,7 +27,7 @@ import { uid } from './format.js'
 /* ------------------------------------------------------------------ util -- */
 
 /** Index of the first header whose normalised text contains every word in `want`. */
-function findCol(header, ...alternatives) {
+export function findCol(header, ...alternatives) {
   const H = header.map(norm)
   for (const want of alternatives) {
     const words = norm(want).split(' ').filter(Boolean)
