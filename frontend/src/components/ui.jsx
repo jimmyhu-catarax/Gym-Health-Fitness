@@ -94,10 +94,13 @@ export function Switch({ checked, onChange, disabled }) {
 
 // options: [{ value, label, icon? }]  — the selected pill slides between cells.
 export function Segmented({ options, value, onChange, className = '' }) {
-  const i = Math.max(0, options.findIndex(o => o.value === value))
+  // -1 when `value` matches no option, which is a real state: a setting nobody has chosen
+  // yet. Sliding the thumb onto option 0 in that case would show a choice the profile has
+  // not made, and the user would never know they still had to make it.
+  const i = options.findIndex(o => o.value === value)
   return (
-    <div className={'seg ' + className} style={{ '--n': options.length, '--i': i }}>
-      <span className="seg-sel" aria-hidden="true" />
+    <div className={'seg ' + className} style={{ '--n': options.length, '--i': Math.max(0, i) }}>
+      {i >= 0 && <span className="seg-sel" aria-hidden="true" />}
       {options.map(o => (
         <button
           key={o.value}

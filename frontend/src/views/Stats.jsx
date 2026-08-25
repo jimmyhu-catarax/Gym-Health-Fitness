@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { EXIDX } from '../lib/exercises.js'
 import { lastBW, streakWeeks, setLabel, modeOf, effortOf } from '../lib/history.js'
 import { fmtNum, fmtDate, fmtVol, todayISO, weekKey } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
-import { bwSheet, goalSheet, calendarSheet, workoutDetailSheet, WorkoutRow, bwDeltaColor } from '../sheets.jsx'
+import { bwSheet, goalSheet, calendarSheet, workoutDetailSheet, WorkoutRow, bwDeltaColor, fitnessAgeSheet } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
 import Heatmap from '../components/Heatmap.jsx'
 import Icon from '../components/Icon.jsx'
@@ -17,6 +17,7 @@ import {
   effortHistogram, isHardSet, HARD_RIR
 } from '../lib/effort.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
+import { fitnessAgeReport, nameResolver } from '../lib/fitness-age.js'
 
 // Which muscles the training in a window actually hit — and, the point of the card,
 // which ones it keeps missing. Shading is relative within the window (lib/muscles.js).
@@ -130,6 +131,93 @@ function EffortCard({ S }) {
 }
 
 // Stats = the analytics hub: all charts, progress and history live here.
+// Chronological age against the age at which your cardiorespiratory fitness would be
+// average (lib/fitness-age.js).
+//
+// The card leads with what the number was built from, and it is not decoration: a fitness
+// age inferred from one resting-heart-rate reading and one derived from a lab VO2max are
+// the same number carrying wildly different weight, and the card is the only place that
+// difference can be said out loud. Same reason the caveats are inline rather than behind
+// an info tap — a floor presented as a measurement is the failure mode here.
+function FitnessAgeCard({ S }) {
+  const nameOf = useMemo(() => nameResolver(S, EXIDX), [S.customEx])
+  const rep = fitnessAgeReport(S, { nameOf })
+
+  if (!rep.ok) {
+    const NEED = {
+      birth: t('Your date of birth'),
+      physSex: t('Which reference curve to compare against'),
+      vo2: t('A VO2max — log a run of 6 minutes or more, add your resting heart rate, or enter a measured value'),
+    }
+    return <div className="card">
+      <div className="row between"><h3>{t('Fitness age')}</h3><Icon name="figureRun" /></div>
+      <div className="muted small" style={{ lineHeight: 1.5, marginTop: 4 }}>
+        {t('Reads your cardiorespiratory fitness back as an age. To work it out it still needs:')}
+      </div>
+      <ul className="muted small" style={{ margin: '8px 0 0', paddingLeft: 18, lineHeight: 1.5 }}>
+        {rep.missing.map(m => <li key={m}>{NEED[m]}</li>)}
+      </ul>
+      <div style={{ height: 12 }} />
+      <Button variant="primary" onClick={fitnessAgeSheet}>{t('Set up fitness age')}</Button>
+    </div>
+  }
+
+  const yrs = Math.abs(rep.delta)
+  const same = yrs < 0.5
+  const col = same ? 'var(--label)' : rep.delta < 0 ? 'var(--acc-ink)' : 'var(--red-ink)'
+  const verdict = same ? t('about the same as your age')
+    : fmtNum(yrs) + ' ' + (rep.delta < 0 ? t('years younger than your age') : t('years older than your age'))
+
+  const SRC = {
+    entered: t('from the VO2max you entered'),
+    run: t('from your best logged run'),
+    restingHr: t('estimated from your resting heart rate'),
+  }
+  const caveats = []
+  if (rep.floor) caveats.push(t('A logged run only sets a floor — nothing here knows whether that effort was maximal, so your real VO2max may be higher.'))
+  if (rep.rough) caveats.push(t('The resting-heart-rate method is the roughest of the three and reads high for untrained people. A logged run or a measured value would beat it.'))
+  if (rep.extrapolated) caveats.push(t('This VO2max sits outside the range the HUNT3 study measured, so the age is extrapolated from the nearest band.'))
+  if (rep.clamped) caveats.push(rep.clamped === 'young' ? t('Capped at 18 — the curve has nothing to say below that.') : t('Capped at 90 — the curve has nothing to say above that.'))
+
+  return <div className="card">
+    <div className="row between"><h3>{t('Fitness age')}</h3><Icon name="figureRun" /></div>
+    <div className="row" style={{ gap: 18, alignItems: 'baseline', marginTop: 6 }}>
+      <div style={{ fontSize: 44, fontWeight: 700, lineHeight: 1, color: col }}>{Math.round(rep.fitness)}</div>
+      <div className="muted small" style={{ lineHeight: 1.4 }}>
+        {t('Chronological age')} {Math.floor(rep.chrono)}<br />
+        <span style={{ color: col }}>{verdict}</span>
+      </div>
+    </div>
+
+    <div className="row between" style={{ marginTop: 14 }}>
+      <span className="muted small">{t('VO2max')}</span>
+      <span className="small" style={{ whiteSpace: 'nowrap' }}><b>{fmtNum(rep.vo2)}</b> <span className="muted">ml/kg/min</span></span>
+    </div>
+    {/* On its own line rather than inline with the value: the longest source string wraps
+        the value column out of alignment with the rows under it. */}
+    <div className="muted small" style={{ textAlign: 'right', marginTop: 1, lineHeight: 1.35 }}>{SRC[rep.source]}</div>
+    {rep.run && rep.source === 'run' && <div className="row between" style={{ marginTop: 4 }}>
+      <span className="muted small">{t('Best run')}</span>
+      <span className="muted small" style={{ textAlign: 'right' }}>{fmtNum(rep.run.kmh)} km/h · {fmtNum(rep.run.min)} min · {fmtDate(rep.run.d, true)}</span>
+    </div>}
+    <div className="row between" style={{ marginTop: 4 }}>
+      <span className="muted small">{t('Average for your age')}</span>
+      <span className="muted small">{fmtNum(rep.norm)} ml/kg/min</span>
+    </div>
+    {rep.others.map(o => <div key={o.source} className="row between" style={{ marginTop: 4 }}>
+      <span className="muted small">{t('Also')}</span>
+      <span className="muted small" style={{ textAlign: 'right' }}>{fmtNum(o.vo2)} · {SRC[o.source]}</span>
+    </div>)}
+
+    {caveats.map((c, i) => <div key={i} className="muted small" style={{ marginTop: 8, lineHeight: 1.45, display: 'flex', gap: 6 }}>
+      <Icon name="info" style={{ flex: '0 0 auto', marginTop: 2 }} /><span>{c}</span>
+    </div>)}
+
+    <div style={{ height: 10 }} />
+    <Button variant="ghost" className="dim" onClick={fitnessAgeSheet}>{t('Edit inputs')}</Button>
+  </div>
+}
+
 export default function Stats() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
@@ -204,6 +292,8 @@ export default function Stats() {
       <div className="tile"><div className="l"><Icon name="flame" />{t('Week streak')}</div><div className="v">{streakWeeks(S)}</div></div>
       <div className="tile"><div className="l"><Icon name="scale" />{t('Weight 30d')}</div><div className="v" style={{ fontSize: 22, color: bwDelta30 === null ? 'inherit' : bwDeltaColor(bwDelta30, (lastBW(S) || {}).w || 0) }}>{bwDelta30 === null ? '—' : (bwDelta30 > 0 ? '+' : '') + fmtNum(bwDelta30) + ' ' + S.unit}</div></div>
     </div>
+
+    <FitnessAgeCard S={S} />
 
     <div className="card">
       <h2>{t('Activity — last 12 months')} <span className="dim" style={{ textTransform: 'none', letterSpacing: 0 }}>· {t('by time trained')}</span></h2>
