@@ -72,6 +72,41 @@ export const daysAgo = (d, now = Date.now()) =>
   Math.max(0, Math.round((Date.parse(isoOf(now) + 'T12:00:00Z') - dayMs(d)) / DAY))
 
 /**
+ * The metrics worth plotting over time, and how each one is drawn.
+ *
+ * `scale` exists because storage units and readable units differ: sleep is minutes on disk,
+ * because that is what the export gives and what arithmetic wants, and hours on a chart,
+ * because "7.4" is a night's sleep and "444" is a number. `color: null` means the series takes
+ * its colour from the current recovery zone rather than a fixed one.
+ */
+export const TREND_METRICS = [
+  { key: 'recovery', label: 'Recovery', unit: '%', color: null },
+  { key: 'sleepDur', label: 'Sleep', unit: 'h', color: 'var(--blue)', scale: 1 / 60 },
+  { key: 'strain', label: 'Strain', unit: '', color: 'var(--orange)' },
+  { key: 'hrv', label: 'HRV', unit: 'ms', color: 'var(--teal)' },
+  { key: 'rhr', label: 'Resting HR', unit: 'bpm', color: 'var(--purple)' },
+]
+
+/** Points for a trend metric, converted to its display unit. */
+export function trendSeries(metrics, key, { days = 30, now = Date.now() } = {}) {
+  const spec = TREND_METRICS.find(m => m.key === key)
+  const pts = seriesOf(metrics, key, { days, now })
+  if (!spec || !spec.scale) return pts
+  return pts.map(p => ({ ...p, y: Math.round(p.y * spec.scale * 10) / 10 }))
+}
+
+/**
+ * Which trends this profile can actually draw.
+ *
+ * Offering every metric regardless would put "Strain" in the picker for someone whose export
+ * has no strain column, and hand them an empty chart as the answer. Two points is the floor —
+ * a single dot is not a trend, it is a dot.
+ */
+export function availableTrends(metrics, { days = 30, now = Date.now() } = {}) {
+  return TREND_METRICS.filter(m => seriesOf(metrics, m.key, { days, now }).length > 1)
+}
+
+/**
  * A metric as chart points, newest last.
  *
  * Days missing that metric are dropped rather than plotted as zero: a night the band was on

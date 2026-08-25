@@ -20,6 +20,7 @@ import { Button, Segmented, SelectRow } from '../components/ui.jsx'
 import { fitnessAgeReport, nameResolver } from '../lib/fitness-age.js'
 import {
   metricsSummary, fmtDuration, STAGE_FILL, STAGE_NAME, ZONE_FILL, ZONE_INK, ZONE_NAME,
+  TREND_METRICS, trendSeries, availableTrends,
 } from '../lib/metrics.js'
 import { trainingRecoveryReport, fmtR } from '../lib/training-recovery.js'
 
@@ -255,6 +256,7 @@ function Delta({ trend, unit = '' }) {
 
 function RecoveryCard({ S }) {
   const [range, setRange] = useState(30)
+  const [metric, setMetric] = useState('recovery')
   const fileRef = useRef(null)
   const sum = useMemo(() => metricsSummary(S, { days: range }), [S.metrics, range])
 
@@ -279,6 +281,10 @@ function RecoveryCard({ S }) {
 
   const { recovery, sleep, strain, hrv, rhr } = sum
   const bd = sleep && sleep.breakdown
+  const trends = availableTrends(sum.metrics, { days: range })
+  // Fall back rather than blanking when the chosen metric is not in this range's data — a
+  // 90-day pick that vanishes on switching to 1W would leave an empty chart and no clue why.
+  const shown = trends.find(m => m.key === metric) || trends[0] || TREND_METRICS[0]
 
   return <div className="card">
     <div className="row between">
@@ -334,11 +340,18 @@ function RecoveryCard({ S }) {
       </>}
     </>}
 
-    {sum.series.recovery.length > 1 && <>
-      <h4 className="sec">{t('Recovery trend')}</h4>
+    {trends.length > 0 && <>
+      <h4 className="sec">{t('Trends')}</h4>
+      {/* One chart with a metric picker rather than a stack of them: the range selector,
+          the axis and the reading habit are all shared, and a card that scrolls for a
+          screen and a half stops being glanceable. Only metrics this profile actually has
+          are offered — see availableTrends. */}
+      {trends.length > 1 && <Segmented className="seg-range" value={metric} onChange={setMetric}
+        options={trends.map(m => ({ value: m.key, label: t(m.label) }))} />}
       <div className="chart">
-        <LineChart points={sum.series.recovery} h={140} unit="%"
-          color={recovery ? ZONE_FILL[recovery.zone] : 'var(--acc)'} />
+        <LineChart points={trendSeries(sum.metrics, shown.key, { days: range })} h={140}
+          unit={shown.unit} invert={shown.key === 'rhr'}
+          color={shown.color || (recovery ? ZONE_FILL[recovery.zone] : 'var(--acc)')} />
       </div>
     </>}
 

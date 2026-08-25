@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import {
   fmtDuration, latestWith, daysAgo, seriesOf, averageOf, trendOf, sleepBreakdown,
   metricsSummary, LOWER_IS_BETTER, STAGE_FILL, STAGE_NAME, ZONE_FILL, ZONE_INK, ZONE_NAME,
+  TREND_METRICS, trendSeries, availableTrends,
 } from './metrics.js'
 
 const DAY = 86400000
@@ -250,5 +251,45 @@ describe('stage colours', () => {
     expect(Object.keys(STAGE_FILL).sort()).toEqual(Object.keys(STAGE_NAME).sort())
     expect(Object.keys(ZONE_FILL).sort()).toEqual(Object.keys(ZONE_NAME).sort())
     expect(Object.keys(ZONE_FILL).sort()).toEqual(Object.keys(ZONE_INK).sort())
+  })
+})
+
+describe('trend metrics', () => {
+  const m = Array.from({ length: 20 }, (_, i) => ({
+    d: iso(19 - i), recovery: 60 + (i % 8), sleepDur: 420 + (i % 40), strain: 9 + (i % 5),
+  }))
+
+  it('converts sleep to hours, because 444 is a number and 7.4 is a night', () => {
+    const pts = trendSeries(m, 'sleepDur', { now: NOW })
+    expect(pts[0].y).toBeGreaterThan(6)
+    expect(pts[0].y).toBeLessThan(9)
+  })
+
+  it('leaves unscaled metrics alone', () => {
+    expect(trendSeries(m, 'recovery', { now: NOW })[0].y).toBe(60)
+  })
+
+  it('offers only the trends the data can actually draw', () => {
+    // Offering "Strain" to someone whose export has no strain column hands them an empty
+    // chart as the answer.
+    const keys = availableTrends(m, { now: NOW }).map(x => x.key)
+    expect(keys).toEqual(['recovery', 'sleepDur', 'strain'])
+    expect(keys).not.toContain('hrv')
+  })
+
+  it('does not call a single point a trend', () => {
+    expect(availableTrends([{ d: iso(0), recovery: 70 }], { now: NOW })).toEqual([])
+  })
+
+  it('offers nothing for an empty series', () => {
+    expect(availableTrends([], { now: NOW })).toEqual([])
+    expect(availableTrends(null, { now: NOW })).toEqual([])
+  })
+
+  it('gives every trend metric a label and a unit field', () => {
+    for (const spec of TREND_METRICS) {
+      expect(spec.label, spec.key).toBeTruthy()
+      expect(typeof spec.unit, spec.key).toBe('string')
+    }
   })
 })

@@ -79,8 +79,12 @@ _Last updated: 2026-08-25 (recovery & sleep card; loop running)_
   **#6** (product name), **#10** (whether to publish fork-owned images), **#12** (the Whoop /
   OpenStrap survey — licences, verbatim CSV schemas, API reference; *extend it, do not
   re-survey*).
-- **Next step:** sleep and strain trend detail, then a `docs/` page for the recovery model.
-  Recovery now surfaces on the Start workout screen. The import hardening from #12 is done —
+- **Next step:** everything buildable on data that already parses is done — trends, the
+  training join, readiness on the Start screen, and `docs/WHOOP.md` as the how-to. What
+  remains is **blocked on the owner, not on a session**: importing a real export (the
+  fixtures are cross-corroborated but synthetic), iOS (needs a Mac), and the ingestion
+  decision in #14. A session that finds nothing else to do here is correct to stop rather
+  than invent scope. The import hardening from #12 is done —
   RFC 4180 was already handled by `parseCSV`, `__MACOSX` skipping is covered by a test, and
   BOM-aware decoding plus a kind-aware emptiness guard landed with `lib/import-file.js`. The
   training↔recovery cross-analysis (`lib/training-recovery.js`) has landed — it is the thing
