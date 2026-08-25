@@ -75,9 +75,12 @@ _Last updated: 2026-08-25 (recovery & sleep card; loop running)_
   **#6** (product name), **#10** (whether to publish fork-owned images), **#12** (the Whoop /
   OpenStrap survey — licences, verbatim CSV schemas, API reference; *extend it, do not
   re-survey*).
-- **Next step:** the training↔recovery cross-analysis — joining the lifting log to `S.metrics`
-  is the one thing neither Hevy nor Whoop does alone, and it is what the merged interface is
-  *for*. Then sleep and strain trends, then the import hardening listed in #12.
+- **Next step:** sleep and strain trend detail, then the import hardening listed in #12. The
+  training↔recovery cross-analysis (`lib/training-recovery.js`) has landed — it is the thing
+  neither Hevy nor Whoop does alone, and what the merged interface is *for*.
+- **Blocked on a decision:** BLE ingestion straight from the band. A PWA cannot drive Whoop's
+  proprietary GATT (iOS Safari has no Web Bluetooth), so it means a native Capacitor plugin —
+  an architectural fork and a new dependency. Not started deliberately.
 - **An autonomous `/loop` is driving this**, self-paced, one reviewable increment per firing.
   Its stop-and-ask triggers are new dependencies, incompatible licences, architectural forks
   (BLE via a native Capacitor plugin vs Web Bluetooth is the canonical one), anything medical,

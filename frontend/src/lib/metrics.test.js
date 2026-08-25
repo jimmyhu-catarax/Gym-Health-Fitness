@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import {
   fmtDuration, latestWith, daysAgo, seriesOf, averageOf, trendOf, sleepBreakdown,
-  metricsSummary, LOWER_IS_BETTER, STAGE_FILL, STAGE_NAME,
+  metricsSummary, LOWER_IS_BETTER, STAGE_FILL, STAGE_NAME, ZONE_FILL, ZONE_INK, ZONE_NAME,
 } from './metrics.js'
 
 const DAY = 86400000
@@ -239,12 +239,16 @@ describe('stage colours', () => {
     // chart segment silently vanish. This shipped once with --violet and --sky, which are
     // accent *key* names and not palette tokens, and two of three stages were invisible.
     const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8')
-    for (const [stage, value] of Object.entries(STAGE_FILL)) {
-      const token = /var\((--[a-z0-9-]+)\)/.exec(value)[1]
-      expect(css.includes(token + ':'), `${stage} uses ${token}, which index.css does not define`).toBe(true)
+    for (const map of [STAGE_FILL, ZONE_FILL, ZONE_INK]) {
+      for (const [key, value] of Object.entries(map)) {
+        const token = /var\((--[a-z0-9-]+)\)/.exec(value)[1]
+        expect(css.includes(token + ':'), `${key} uses ${token}, which index.css does not define`).toBe(true)
+      }
     }
   })
-  it('gives every stage a label', () => {
+  it('gives every stage and zone a label', () => {
     expect(Object.keys(STAGE_FILL).sort()).toEqual(Object.keys(STAGE_NAME).sort())
+    expect(Object.keys(ZONE_FILL).sort()).toEqual(Object.keys(ZONE_NAME).sort())
+    expect(Object.keys(ZONE_FILL).sort()).toEqual(Object.keys(ZONE_INK).sort())
   })
 })

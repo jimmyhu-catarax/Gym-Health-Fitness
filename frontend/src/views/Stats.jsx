@@ -18,7 +18,10 @@ import {
 } from '../lib/effort.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
 import { fitnessAgeReport, nameResolver } from '../lib/fitness-age.js'
-import { metricsSummary, fmtDuration, STAGE_FILL, STAGE_NAME } from '../lib/metrics.js'
+import {
+  metricsSummary, fmtDuration, STAGE_FILL, STAGE_NAME, ZONE_FILL, ZONE_INK, ZONE_NAME,
+} from '../lib/metrics.js'
+import { trainingRecoveryReport } from '../lib/training-recovery.js'
 
 // Which muscles the training in a window actually hit — and, the point of the card,
 // which ones it keeps missing. Shading is relative within the window (lib/muscles.js).
@@ -233,8 +236,6 @@ function FitnessAgeCard({ S }) {
 //   It never draws a stage breakdown whose slices do not sum to the night. That identity is
 //   also the import's correctness check (see sleepBreakdown), so a broken sum means a column
 //   was matched to the wrong metric, and a plausible-looking chart is the worst outcome.
-const ZONE_INK = { green: 'var(--green-ink)', yellow: 'var(--yellow-ink)', red: 'var(--red-ink)' }
-const ZONE_FILL = { green: 'var(--green)', yellow: 'var(--yellow)', red: 'var(--red)' }
 
 /** "today" / "yesterday" / "3 days ago" — the age has to travel with the number. */
 function Age({ days }) {
@@ -350,6 +351,113 @@ function RecoveryCard({ S }) {
   </div>
 }
 
+// The join: what the lifting log and the physiological series say about each other.
+//
+// This is the only screen in the app that exists *because* both halves are here — Hevy alone
+// cannot ask whether Tuesday cost Wednesday, and Whoop alone does not know what you lifted.
+//
+// It is also the easiest place in the app to say something false, so the caveat is rendered
+// rather than optional and every figure carries its sample size. A number on a card reads as
+// a finding whether or not it deserves to; the n is what lets a reader discount it.
+
+/** A correlation, or a plain statement of why there isn't one worth showing. */
+function Relation({ res, up, down, none }) {
+  if (!res) return null
+  if (!res.ok) {
+    return <div className="muted small" style={{ marginTop: 6 }}>
+      {t('Not enough overlapping days yet — {0} of {1}.', res.n, res.need)}
+    </div>
+  }
+  const text = !res.notable ? none : res.direction === 'up' ? up : down
+  return <div className="small" style={{ marginTop: 6, lineHeight: 1.45 }}>
+    <span style={{ color: res.notable ? 'var(--label)' : 'var(--label-2)' }}>{text}</span>
+    <span className="dim"> · r={fmtNum(res.r)}, {t('{0} days', res.n)}</span>
+  </div>
+}
+
+function TrainingRecoveryCard({ S }) {
+  const rep = useMemo(() => trainingRecoveryReport(S), [S.metrics, S.workouts])
+
+  if (!rep.ok) {
+    // Only worth showing at all once there is some physiology; otherwise the Recovery card
+    // above is already asking for the import and two empty states in a row is nagging.
+    if (!S.metrics || !S.metrics.length) return null
+    return <div className="card">
+      <div className="row between"><h3>{t('Training & recovery')}</h3><Icon name="chartLine" /></div>
+      <div className="muted small" style={{ lineHeight: 1.5, marginTop: 4 }}>
+        {t('How your sessions and your recovery move together. Needs {0} days of recovery data — you have {1}.', rep.need, rep.have)}
+      </div>
+    </div>
+  }
+
+  const { cost, byZone } = rep
+  const zones = byZone ? ['green', 'yellow', 'red'].filter(k => byZone[k]) : []
+  const peak = zones.length ? Math.max(...zones.map(k => byZone[k].mean)) : 0
+
+  return <div className="card">
+    <div className="row between"><h3>{t('Training & recovery')}</h3><Icon name="chartLine" /></div>
+    <div className="muted small" style={{ marginTop: 2 }}>
+      {t('{0} days, {1} of them trained', rep.days, rep.trainedDays)}
+    </div>
+
+    {cost && <>
+      <h4 className="sec">{t('The morning after')}</h4>
+      <div className="row between" style={{ alignItems: 'baseline' }}>
+        <span className="muted small">{t('After you train')}</span>
+        <span><b>{fmtNum(cost.after)}%</b> <span className="dim small">{t('({0} days)', cost.nAfter)}</span></span>
+      </div>
+      <div className="row between" style={{ alignItems: 'baseline', marginTop: 4 }}>
+        <span className="muted small">{t('After a rest day')}</span>
+        <span><b>{fmtNum(cost.rest)}%</b> <span className="dim small">{t('({0} days)', cost.nRest)}</span></span>
+      </div>
+      <div className="small" style={{
+        marginTop: 6,
+        color: cost.delta < -3 ? 'var(--red-ink)' : cost.delta > 3 ? 'var(--green-ink)' : 'var(--label-2)',
+      }}>
+        {Math.abs(cost.delta) < 1
+          ? t('Training days cost you almost nothing the next morning.')
+          : cost.delta < 0
+            ? t('You wake up {0} points lower after training.', fmtNum(Math.abs(cost.delta)))
+            : t('You wake up {0} points higher after training.', fmtNum(cost.delta))}
+      </div>
+    </>}
+
+    {zones.length > 0 && <>
+      <h4 className="sec">{t('What you lift, by how recovered you were')}</h4>
+      {zones.map(k => <div key={k} style={{ marginTop: 6 }}>
+        <div className="row between">
+          <span className="muted small">{t(ZONE_NAME[k])}</span>
+          <span className="small">{fmtVol(byZone[k].mean, S.unit)} <span className="dim">{t('({0} days)', byZone[k].n)}</span></span>
+        </div>
+        <div style={{ height: 6, borderRadius: 3, background: 'var(--surface-2)', marginTop: 3 }}>
+          <div style={{ height: '100%', borderRadius: 3, background: ZONE_FILL[k], width: (peak ? (byZone[k].mean / peak) * 100 : 0) + '%' }} />
+        </div>
+      </div>)}
+    </>}
+
+    <h4 className="sec">{t('Patterns')}</h4>
+    <Relation res={rep.strainVsNext}
+      down={t('Harder days are followed by lower recovery.')}
+      up={t('Harder days are followed by higher recovery — worth a second look.')}
+      none={t('Strain and next-day recovery move independently for you.')} />
+    <Relation res={rep.sleepVsVolume}
+      up={t('You lift more after a longer night.')}
+      down={t('You lift more after a shorter night — worth a second look.')}
+      none={t('Sleep length and session volume move independently for you.')} />
+    <Relation res={rep.recoveryVsVolume}
+      up={t('You lift more on days you wake up recovered.')}
+      down={t('You lift more on days you wake up run down — worth a second look.')}
+      none={t('Recovery and session volume move independently for you.')} />
+
+    {/* Not optional. Every figure above describes past days; none of it establishes cause,
+        and training hard and sleeping badly are both likelier in a stressful week. */}
+    <div className="muted small" style={{ marginTop: 12, lineHeight: 1.45, display: 'flex', gap: 6 }}>
+      <Icon name="info" style={{ flex: '0 0 auto', marginTop: 2 }} />
+      <span>{t('These are patterns in your own days, not proof that one caused the other.')}</span>
+    </div>
+  </div>
+}
+
 export default function Stats() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
@@ -426,6 +534,8 @@ export default function Stats() {
     </div>
 
     <RecoveryCard S={S} />
+
+    <TrainingRecoveryCard S={S} />
 
     <FitnessAgeCard S={S} />
 

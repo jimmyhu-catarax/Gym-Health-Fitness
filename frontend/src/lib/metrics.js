@@ -36,6 +36,13 @@ export const UNIT = {
  * and `sky` are per-profile *accent key* names, which is an easy and silent mistake to make.
  */
 export const STAGE_FILL = { deep: 'var(--purple)', rem: 'var(--blue)', light: 'var(--teal)' }
+
+/** Recovery zones. `-ink` for anything a person reads, the plain fill for anything they
+ *  only look at — see frontend/src/CLAUDE.md; getting that backwards passes in dark mode
+ *  and fails contrast in light. */
+export const ZONE_FILL = { green: 'var(--green)', yellow: 'var(--yellow)', red: 'var(--red)' }
+export const ZONE_INK = { green: 'var(--green-ink)', yellow: 'var(--yellow-ink)', red: 'var(--red-ink)' }
+export const ZONE_NAME = { green: 'Recovered', yellow: 'Moderate', red: 'Run down' }
 export const STAGE_NAME = { deep: 'Deep', rem: 'REM', light: 'Light' }
 
 /** Metrics where a bigger number is worse, so a rising trend is not good news. */
