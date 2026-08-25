@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  pearson, mean, pairDays, recoveryAfterTraining, volumeByZone, relate,
+  pearson, mean, fmtR, pairDays, recoveryAfterTraining, volumeByZone, relate,
   trainingRecoveryReport, MIN_PAIRS, R_NOTABLE,
 } from './training-recovery.js'
 
@@ -41,6 +41,29 @@ describe('pearson', () => {
   it('refuses too few points', () => {
     expect(pearson([1, 2], [2, 4])).toBeNull()
     expect(pearson([], [])).toBeNull()
+  })
+})
+
+describe('fmtR', () => {
+  it('keeps two decimals, which is the convention for r', () => {
+    expect(fmtR(-0.9, 'en-US')).toBe('-0.90')
+    expect(fmtR(0.77, 'en-US')).toBe('0.77')
+    expect(fmtR(1, 'en-US')).toBe('1.00')
+  })
+  it('does not flatten a small correlation into a broken-looking "-0"', () => {
+    // The app's general formatter rounds to one decimal, so -0.03 came out as the string
+    // "-0" — which reads as a broken number rather than as "no relationship". A real
+    // coefficient this small is still a real coefficient.
+    expect(fmtR(-0.03, 'en-US')).toBe('-0.03')
+    expect(fmtR(0.04, 'en-US')).toBe('0.04')
+  })
+  it('never renders negative zero', () => {
+    expect(fmtR(-0, 'en-US')).toBe('0.00')
+    expect(fmtR(0, 'en-US')).toBe('0.00')
+  })
+  it('returns null on nonsense', () => {
+    expect(fmtR(NaN)).toBeNull()
+    expect(fmtR(undefined)).toBeNull()
   })
 })
 

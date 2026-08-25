@@ -21,7 +21,7 @@ import { fitnessAgeReport, nameResolver } from '../lib/fitness-age.js'
 import {
   metricsSummary, fmtDuration, STAGE_FILL, STAGE_NAME, ZONE_FILL, ZONE_INK, ZONE_NAME,
 } from '../lib/metrics.js'
-import { trainingRecoveryReport } from '../lib/training-recovery.js'
+import { trainingRecoveryReport, fmtR } from '../lib/training-recovery.js'
 
 // Which muscles the training in a window actually hit — and, the point of the card,
 // which ones it keeps missing. Shading is relative within the window (lib/muscles.js).
@@ -371,7 +371,7 @@ function Relation({ res, up, down, none }) {
   const text = !res.notable ? none : res.direction === 'up' ? up : down
   return <div className="small" style={{ marginTop: 6, lineHeight: 1.45 }}>
     <span style={{ color: res.notable ? 'var(--label)' : 'var(--label-2)' }}>{text}</span>
-    <span className="dim"> · r={fmtNum(res.r)}, {t('{0} days', res.n)}</span>
+    <span className="dim"> · r={fmtR(res.r)}, {t('{0} days', res.n)}</span>
   </div>
 }
 

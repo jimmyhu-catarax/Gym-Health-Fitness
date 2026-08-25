@@ -63,6 +63,22 @@ export function pearson(xs, ys) {
 export const mean = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
 
 /**
+ * Render a correlation.
+ *
+ * Its own formatter because the app's general one rounds to a single decimal, and a
+ * correlation of -0.03 through that becomes the string "-0" — which reads as a broken number
+ * rather than as "no relationship". Two decimals is also just the convention for r.
+ *
+ * The `|| 0` in `pearson` handles negative zero at the source; this handles the far more
+ * common case of a real but tiny coefficient.
+ */
+export function fmtR(r, locale) {
+  if (!isFinite(r)) return null
+  const v = r === 0 ? 0 : r     // never render "-0.00"
+  return v.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+/**
  * One row per calendar day in the window, carrying both halves.
  *
  * Days are the join key because that is the finest granularity both sides share: a recovery
