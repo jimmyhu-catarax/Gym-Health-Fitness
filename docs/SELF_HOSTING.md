@@ -11,14 +11,15 @@ Requirements: [Docker](https://docs.docker.com/get-docker/) with the Compose plu
 git clone https://github.com/DuarteSantos8/gym-app opengym
 cd opengym
 cp .env.example .env
-docker compose pull   # prebuilt images from ghcr.io (amd64 + arm64) — or skip and build from source
-docker compose up -d
+docker compose up -d --build
 ```
 
-- First start downloads the exercise images/GIFs (~140 MB) once into `app/img` and `app/gif`.
+- First start builds both images from this checkout, then downloads the exercise images/GIFs
+  (~140 MB) once into `app/img` and `app/gif`. No Node needed locally — Docker does the build.
 - Open **http://localhost:8080** and create a profile with a passkey.
-- Rather build from source than pull prebuilt images? Skip `docker compose pull` and run
-  `docker compose up -d --build` instead — no Node needed locally either way.
+- There are no prebuilt images to pull. `docker compose up` without `--build` used to fetch
+  upstream openGym's containers, which do not contain this fork's code; the `image:` keys were
+  removed rather than left as a trap. See the comment in `docker-compose.yml`.
 
 Check it's healthy:
 
@@ -137,20 +138,14 @@ refuses the lock while the phone is in Low Power Mode.
 
 ## 7. Updating
 
-Running prebuilt images:
-
-```bash
-git pull                    # picks up compose/config changes
-docker compose pull
-docker compose up -d
-```
-
-Building from source instead:
-
 ```bash
 git pull
 docker compose up -d --build
 ```
+
+**The `--build` is not optional.** Compose reuses the images it built last time, so `git pull
+&& docker compose up -d` will start your old code against your new config — the most confusing
+possible outcome, because nothing errors.
 
 The app shell is versioned (`?v=N`) so clients pick up changes on next load. Your `./data` and the
 downloaded media are untouched.
@@ -166,4 +161,5 @@ downloaded media are untouched.
 | No "Notifications" option in Settings | Requires a signed-in profile and HTTPS (or `localhost`) — guest mode and plain HTTP over LAN can't subscribe. |
 | Day reminder fires at the wrong time | Toggle it off and on in Settings so it re-detects your browser's timezone (also happens automatically on every app load — see section 6). |
 | Want to reset a stuck login | Delete the cookie in your browser; sessions are just signed cookies. |
-| `docker compose pull` fails with "denied" / "unauthorized" | The prebuilt images aren't published yet, or need to be, or the GHCR package is still private — build from source instead (`docker compose up -d --build`). |
+| `docker compose pull` reports nothing to pull | Expected: this fork publishes no images and builds from source. Use `docker compose up -d --build`. |
+| Code changes don't show up after `git pull` | You left off `--build`, so compose restarted the previously built image. Re-run `docker compose up -d --build`. |

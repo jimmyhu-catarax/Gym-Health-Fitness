@@ -9,9 +9,10 @@ Node passkey/push API, Capacitor shells for Android/iOS, all behind `docker comp
 PRs. It is free to diverge from openGym, which means two things a session should act on rather
 than tiptoe around: upstream branding is *wrong here* and gets replaced as we touch it (README
 badges, `docs/SELF_HOSTING.md`'s clone URL and `SECURITY.md`'s release process still point at
-`DuarteSantos8/openGym`), and the prebuilt images in `docker-compose.yml` are upstream's, so
-they eventually need to be fork-owned or dropped. None of that licenses a drive-by rewrite —
-open an issue, do it deliberately.
+`DuarteSantos8/openGym` — issue #4 tracks it). None of that licenses a drive-by rewrite —
+open an issue, do it deliberately. The prebuilt images that used to sit in `docker-compose.yml`
+were upstream's; they were removed rather than replaced, so compose now always builds this
+repo's code.
 
 This file records what a session **cannot** work out by reading the code. Layout, dependencies
 and the standard build commands are deliberately not here — `ls`, the manifests and `--help`
@@ -96,9 +97,11 @@ Everything npm lives in `frontend/` — there is **no root `package.json`**, so 
 and `import-health.test.js` build their fixtures with the built-in `node:sqlite`, which older
 Node doesn't have. A CI matrix that includes Node 20 fails for that reason alone.
 
-**`docker compose up` without `--build` runs upstream's prebuilt images**
-(`ghcr.io/duartesantos8/opengym-*:latest`), not this fork's code. Use `--build` to run what is
-actually in this repo, or the design work and the new importers simply won't be there.
+**`docker compose up` builds from this checkout — but reuses what it built last time.** There
+are no `image:` keys any more (they named upstream's tags, and compose prefers a pullable image
+over a build context, so plain `up` silently started upstream's app). The trap that replaces it
+is quieter: after a `git pull`, `docker compose up -d` restarts the *old* image and nothing
+errors. Pass `--build`.
 
 In `npm run dev`, requests to `/img/*` and `/gif/*` return **502 and that is expected**: Vite
 proxies them to a media server that only exists once the media has been fetched. The app

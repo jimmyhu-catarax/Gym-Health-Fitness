@@ -22,9 +22,16 @@ services:
     restart: "no"
 
   # Passkey auth + per-user data (Node, no framework).
-  # image: prebuilt (docker compose pull). build: from source (docker compose up --build).
+  #
+  # There is no `image:` key here on purpose, and it is worth knowing why before adding one
+  # back. It used to name upstream's ghcr.io tag; compose prefers a pullable image over a
+  # build context, so the documented `docker compose up` started *upstream's* container —
+  # none of this fork's code, and no error to say so. A slower first run beats running the
+  # wrong app silently.
+  #
+  # The cost this buys: `up` reuses the image it built last time, so a `git pull` alone
+  # changes nothing until you pass `--build`. Every documented upgrade command says so.
   api:
-    image: ghcr.io/duartesantos8/opengym-api:latest
     build: ./api
     restart: unless-stopped
     env_file: .env
@@ -37,7 +44,6 @@ services:
   # Builds the React frontend (multi-stage) and serves it, proxying /api → api
   # and the exercise media from the shared volume. Single origin for passkeys.
   web:
-    image: ghcr.io/duartesantos8/opengym-web:latest
     build:
       context: .
       dockerfile: web/Dockerfile

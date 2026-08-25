@@ -92,14 +92,13 @@ You need [Docker](https://docs.docker.com/get-docker/) with Compose.
 git clone https://github.com/DuarteSantos8/openGym
 cd openGym
 cp .env.example .env
-docker compose pull   # grab prebuilt images (amd64 + arm64) — skip to build from source instead
-docker compose up -d
+docker compose up -d --build
 ```
 
-Open **http://localhost:8080**, tap **Create profile**, and you're in. First launch downloads
-the exercise media (~140 MB) once. Prefer building the images yourself instead of pulling from
-`ghcr.io`? Drop the `pull` step and run `docker compose up -d --build` — you don't need Node or
-a build step locally either way.
+Open **http://localhost:8080**, tap **Create profile**, and you're in. First launch builds the
+two images from this repo and downloads the exercise media (~140 MB) once — you don't need Node
+or a build step locally, Docker does all of it. Keep the `--build` when you upgrade: compose
+reuses the images it built last time, so `git pull` on its own changes nothing.
 
 > Want it reachable from your phone over the internet with passkeys? You'll need an HTTPS
 > domain — a two-line change in `.env`. See **[docs/SELF_HOSTING.md](docs/SELF_HOSTING.md)**.
