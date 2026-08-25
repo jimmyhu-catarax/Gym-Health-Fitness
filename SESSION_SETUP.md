@@ -43,7 +43,7 @@ is worse than none — it misleads with authority, which ad-hoc rediscovery at l
 
 # Project Environment Record
 
-_Last updated: 2026-08-24 (after PR #3 merged; issues #4–#6 opened)_
+_Last updated: 2026-08-25 (after PR #8, fitness age, merged)_
 
 ## Static — only recompute when the project's needs actually change
 
@@ -65,11 +65,14 @@ _Last updated: 2026-08-24 (after PR #3 merged; issues #4–#6 opened)_
 
 ## Dynamic — the only part that should change often
 
-- **Last session:** imported openGym as the base; reworked the colour system around fills
-  vs. inks (127 failing contrast pairs → 0); added Google Fit / Health Connect / Whoop import
-  with a dependency-free ZIP and SQLite reader; added `CLAUDE.md`, this file and CI. **PRs #1,
-  #2 and #3 are all merged**, so main carries the whole application, green on Node 22 and 24,
-  and the colour rules now lazy-load from `frontend/src/CLAUDE.md`.
+- **Last session:** added **fitness age** (Stats → Fitness age) — VO2max read back against the
+  HUNT3 population curve as the age at which it would be average, estimated from a measured
+  value, else a qualifying logged run (Daniels & Gilbert VDOT), else resting heart rate (Uth).
+  Pure helpers in `lib/fitness-age.js` with 60 tests asserting against the *published* reference
+  points, not the module's own output. See `docs/FITNESS_AGE.md`. Earlier: the openGym base
+  import, the fill-vs-ink colour rework, the Google Fit / Health Connect / Whoop importers,
+  `CLAUDE.md`, this file and CI. **PRs #1, #2, #3, #7 and #8 are all merged**; main is green on
+  Node 22 and 24, 668 tests.
 - **Open:** no PRs. Three issues, all of them consequences of the fork-goal decision:
   **#4** every "report a problem" path still routes to upstream's tracker — including the
   security advisory link, so a hole in *our* code gets filed against someone who doesn't run it;
@@ -80,7 +83,15 @@ _Last updated: 2026-08-24 (after PR #3 merged; issues #4–#6 opened)_
   is advisory: the workflow runs on every PR, but nothing stops a red one being merged. After
   that, #5 first — it is a correctness bug, the other two are cosmetic until someone other than
   the owner runs this.
-- **Decisions to revisit:** fork goal set to *divergent product* (2026-08-24). Its consequences
-  now live in #4/#5/#6 rather than here, so this line stays only as the record of *why* those
-  issues exist. Nothing about them touches `LICENSE` or `NOTICE.md` — a fork may take its own
-  name, it may not drop its provenance.
+- **Decisions to revisit:**
+  - Fork goal set to *divergent product* (2026-08-24). Its consequences now live in #4/#5/#6
+    rather than here, so this line stays only as the record of *why* those issues exist. Nothing
+    about them touches `LICENSE` or `NOTICE.md` — a fork may take its own name, it may not drop
+    its provenance.
+  - Fitness age prefers a logged run over the resting-heart-rate estimate **even when the run
+    reads lower**, because a run is a floor and the ratio method is known to read high for
+    untrained people. The visible consequence: logging an easy run can *worsen* your displayed
+    fitness age. It is deliberate, documented and shown on the card — and it is the call in that
+    feature most likely to draw a complaint, so it is written down rather than rediscovered.
+  - The fitness-age strings are English-only in all 12 locales. That is the documented i18n
+    fallback, not a bug, but `src/locales/*.js` is where it gets fixed if anyone wants it.
