@@ -246,6 +246,115 @@ describe('isWhoopMetrics', () => {
   })
 })
 
+/* The verbatim physiological_cycles.csv header, cross-corroborated from a real Feb-2024
+   export and from an independent importer's alias lists. Testing against the actual header
+   rather than an invented one is the difference between proving this reads Whoop's files and
+   proving it reads mine. */
+const REAL_CYCLES_HEADER =
+  'Cycle start time,Cycle end time,Cycle timezone,Recovery score %,Resting heart rate (bpm),' +
+  'Heart rate variability (ms),Skin temp (celsius),Blood oxygen %,Day Strain,Energy burned (cal),' +
+  'Max HR (bpm),Average HR (bpm),Sleep onset,Wake onset,Sleep performance %,Respiratory rate (rpm),' +
+  'Asleep duration (min),In bed duration (min),Light sleep duration (min),Deep (SWS) duration (min),' +
+  'REM duration (min),Awake duration (min),Sleep need (min),Sleep debt (min),Sleep efficiency %,' +
+  'Sleep consistency %'
+
+// Onset before midnight, wake after — the case where the two dating choices disagree.
+const REAL_ROW =
+  '2024-02-08 23:30:00,2024-02-09 23:12:00,UTC-05:00,64,52,44.1,33.7,96,10.0,2450,' +
+  '171,68,2024-02-08 23:30:00,2024-02-09 07:12:00,66,15.1,' +
+  '395,462,136,115,144,67,594,199,85,74'
+
+describe('the real export header', () => {
+  it('reads every metric out of Whoop’s actual column names', () => {
+    const r = parseWhoopMetricsCsv(csv(REAL_CYCLES_HEADER, REAL_ROW))
+    expect(r.error).toBeUndefined()
+    const day = r.rows.get('2024-02-09')
+    expect(day).toMatchObject({
+      recovery: 64, rhr: 52, hrv: 44.1, skinTemp: 33.7, spo2: 96, strain: 10,
+      maxHr: 171, avgHr: 68, sleepPerf: 66, respRate: 15.1,
+      sleepDur: 395, inBed: 462, light: 136, deep: 115, rem: 144, awake: 67,
+      sleepNeed: 594, sleepDebt: 199, sleepEff: 85, sleepCons: 74,
+    })
+  })
+
+  it('dates the night by when you woke, not when you fell asleep', () => {
+    // The cycle starts at 23:30 on the 8th and ends on the 9th. Dating by Cycle start time
+    // files this night's recovery a day early — wrong for nearly every row, and invisible
+    // unless you go looking for it.
+    const r = parseWhoopMetricsCsv(csv(REAL_CYCLES_HEADER, REAL_ROW))
+    expect(r.rows.has('2024-02-09')).toBe(true)
+    expect(r.rows.has('2024-02-08')).toBe(false)
+  })
+
+  it('falls back to cycle start when there is no wake column', () => {
+    const r = parseWhoopMetricsCsv(csv(
+      'Cycle start time,Recovery score %', '2024-02-08 23:30:00,64'))
+    expect(r.rows.has('2024-02-08')).toBe(true)
+  })
+
+  it('keeps the sleep arithmetic self-consistent', () => {
+    // Light + Deep + REM = Asleep, and Asleep + Awake = In bed. If a column were mismatched
+    // these identities break, so asserting them checks the mapping rather than the values.
+    const day = parseWhoopMetricsCsv(csv(REAL_CYCLES_HEADER, REAL_ROW)).rows.get('2024-02-09')
+    expect(day.light + day.deep + day.rem).toBe(day.sleepDur)
+    expect(day.sleepDur + day.awake).toBe(day.inBed)
+  })
+})
+
+describe('energy units', () => {
+  it('reads calories when the header says calories', () => {
+    const r = parseWhoopMetricsCsv(csv(
+      'Wake onset,Energy burned (cal)', '2024-02-09 07:12:00,2450'))
+    expect(r.rows.get('2024-02-09').kcal).toBe(2450)
+  })
+
+  it('converts kilojoules rather than reading them as calories', () => {
+    // 8368 kJ is 2000 kcal, and 8368 is a perfectly plausible-looking calorie count. Only
+    // the header can tell them apart.
+    const r = parseWhoopMetricsCsv(csv(
+      'Wake onset,Energy burned (kJ)', '2024-02-09 07:12:00,8368'))
+    expect(r.rows.get('2024-02-09').kcal).toBeCloseTo(2000, 0)
+  })
+
+  it('drops an energy column whose header carries no unit', () => {
+    // A missing calorie figure is honest; a wrong one is not. Guessing from magnitude is the
+    // shortcut that rewrites a genuine 4,500 kcal day as 1,076.
+    const r = parseWhoopMetricsCsv(csv(
+      'Wake onset,Recovery score %,Energy burned', '2024-02-09 07:12:00,64,2450'))
+    expect(r.found).toContain('recovery')
+    expect(r.rows.get('2024-02-09').kcal).toBeUndefined()
+  })
+})
+
+describe('naps', () => {
+  it('skips a row the file marks as a nap', () => {
+    const r = parseWhoopMetricsCsv(csv(
+      'Wake onset,Asleep duration (min),Nap',
+      '2024-02-09 07:12:00,441,false',
+      '2024-02-09 14:40:00,26,true'))
+    expect(r.rows.get('2024-02-09').sleepDur).toBe(441)
+    expect(r.naps).toBe(1)
+  })
+
+  it('is not fooled by the nap being listed first', () => {
+    const r = parseWhoopMetricsCsv(csv(
+      'Wake onset,Asleep duration (min),Nap',
+      '2024-02-09 14:40:00,26,true',
+      '2024-02-09 07:12:00,441,false'))
+    expect(r.rows.get('2024-02-09').sleepDur).toBe(441)
+  })
+
+  it('accepts the boolean spellings an export might use', () => {
+    const r = parseWhoopMetricsCsv(csv(
+      'Wake onset,Asleep duration (min),Nap',
+      '2024-02-09 07:12:00,441,False',
+      '2024-02-09 14:40:00,26,TRUE',
+      '2024-02-10 07:00:00,30,yes'))
+    expect(r.naps).toBe(2)
+    expect(r.rows.has('2024-02-10')).toBe(false)
+  })
+})
+
 describe('METRICS table', () => {
   it('gives every metric a range that could refuse something', () => {
     for (const [k, spec] of Object.entries(METRICS)) {

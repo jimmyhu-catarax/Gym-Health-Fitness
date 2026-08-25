@@ -22,6 +22,7 @@
 
 import { parseCSV, parseWhen, matchExercise, norm, num, toMinutes, LB_TO_KG } from './import-csv.js'
 import { openSqlite, looksLikeSqlite } from './sqlite.js'
+import { parseWhoopMetricsCsv, mergeWhoopMetrics, isWhoopMetrics } from './whoop-metrics.js'
 import { uid } from './format.js'
 
 /* ------------------------------------------------------------------ util -- */
@@ -350,6 +351,20 @@ export function parseHealthConnectDb(db, { unit = 'kg' } = {}) {
 
 const baseOf = p => String(p).split('/').pop().toLowerCase()
 
+/** Whoop names its physiology files predictably; the sniffer below is the fallback. */
+const isWhoopMetricFile = name => /^(sleeps|physiological[_ ]?cycles)/i.test(baseOf(name))
+
+const METRIC_META = new Set(['d', 't', 'src'])
+
+/** Shape a merged daily series the way ImportSummary expects to describe it. */
+function metricsResult(metrics, source) {
+  const fields = [...new Set(metrics.flatMap(Object.keys))].filter(k => !METRIC_META.has(k))
+  return {
+    kind: 'metrics', source, metrics, fields,
+    days: metrics.length, from: metrics[0].d, to: metrics[metrics.length - 1].d,
+  }
+}
+
 /**
  * Decide what an archive is and pull the one thing worth reading out of it.
  *
@@ -377,12 +392,25 @@ export async function parseArchive(entries, opts = {}) {
     }
   }
 
-  // Whoop: one file per data type, and only the workouts are usable here.
+  // Whoop: one file per data type, and a single export carries several of them. They are
+  // read together rather than first-match-wins, because one day is split across two files —
+  // strain and recovery in physiological_cycles.csv, the sleep detail in sleeps.csv — so
+  // stopping at the first hit would silently drop half of every day.
+  const whoopMetrics = []
+  for (const e of files.filter(e => isWhoopMetricFile(e.name) && e.name.endsWith('.csv'))) {
+    const parsed = parseWhoopMetricsCsv(await e.text())
+    if (!parsed.error) whoopMetrics.push(parsed)
+  }
+  const metrics = whoopMetrics.length ? mergeWhoopMetrics(whoopMetrics) : []
+
   const whoop = files.find(e => baseOf(e.name).startsWith('workouts'))
   if (whoop) {
     const parsed = parseWhoopWorkouts(await whoop.text(), opts)
-    if (!parsed.error) return parsed
+    // Physiology rides along on the workouts result rather than becoming a second import the
+    // user has to run: it came out of the same zip and describes the same days.
+    if (!parsed.error) return metrics.length ? { ...parsed, metrics } : parsed
   }
+  if (metrics.length) return metricsResult(metrics, 'Whoop')
 
   // Google Fit: prefer the per-weigh-in JSON, fall back to the daily CSV roll-up.
   const weightJson = files.filter(e => /weight/i.test(e.name) && e.name.endsWith('.json'))
@@ -422,6 +450,10 @@ export async function parseArchive(entries, opts = {}) {
       const parsed = parseWhoopWorkouts(text, opts)
       if (!parsed.error) return parsed
     }
+    if (isWhoopMetrics(rows[0])) {
+      const parsed = parseWhoopMetricsCsv(text)
+      if (!parsed.error) return metricsResult(mergeWhoopMetrics([parsed]), 'Whoop')
+    }
     const parsed = parseGoogleFitCsv(text, opts)
     if (!parsed.error) return parsed
   }
@@ -435,5 +467,10 @@ export function parseHealthText(text, opts = {}) {
   const rows = parseCSV(s)
   if (rows.length < 2) return { error: 'empty' }
   if (isWhoopWorkouts(rows[0])) return parseWhoopWorkouts(s, opts)
+  if (isWhoopMetrics(rows[0])) {
+    const parsed = parseWhoopMetricsCsv(s)
+    if (!parsed.error) return metricsResult(mergeWhoopMetrics([parsed]), 'Whoop')
+    return parsed
+  }
   return parseGoogleFitCsv(s, opts)
 }

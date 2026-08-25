@@ -23,7 +23,12 @@ export const DEF = {
   // drawing to show; this one selects the HUNT3 population curve, where male and female
   // means differ by about a quarter. Reading a diagram preference as a statement about
   // physiology would move somebody's fitness age by more than a decade without asking.
-  birth: null, physSex: null, restHr: null, vo2max: null
+  birth: null, physSex: null, restHr: null, vo2max: null,
+  // Daily physiological summary — recovery, HRV, resting HR, strain, sleep — one row per
+  // ISO date, same day-level shape as `bodyweight` so re-importing an overlapping export is
+  // harmless. Filled by a Whoop import (lib/whoop-metrics.js); the days it does not cover
+  // can be computed from HRV and resting HR (lib/physiology.js).
+  metrics: []
 }
 const clone = o => JSON.parse(JSON.stringify(o))
 
