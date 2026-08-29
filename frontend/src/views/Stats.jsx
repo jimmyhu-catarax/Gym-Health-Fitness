@@ -22,6 +22,7 @@ import {
   metricsSummary, fmtDuration, STAGE_FILL, STAGE_NAME, ZONE_FILL, ZONE_INK, ZONE_NAME,
   TREND_METRICS, trendSeries, availableTrends,
 } from '../lib/metrics.js'
+import { trendDetail, STAGES } from '../lib/trends.js'
 import { trainingRecoveryReport, fmtR } from '../lib/training-recovery.js'
 
 // Which muscles the training in a window actually hit — and, the point of the card,
@@ -471,6 +472,107 @@ function TrainingRecoveryCard({ S }) {
   </div>
 }
 
+// What the single trend line cannot show: what your sleep is made of, and whether this week
+// is heavy by your own standards.
+//
+// Sections stand alone — an export with sleep but no strain gets the sleep half rather than a
+// blank card — and each one refuses on its own terms rather than drawing something thin. A
+// mix shift computed from four nights is noise with a chart attached.
+const LOAD_INK = { easing: 'var(--blue-ink)', steady: 'var(--green-ink)', ramping: 'var(--orange-ink)' }
+
+function SleepLoadCard({ S }) {
+  const [range, setRange] = useState(30)
+  const d = useMemo(() => trendDetail(S, { days: range }), [S.metrics, range])
+  if (!d.ok) return null
+
+  const { mix, shortfall, load, weekly } = d
+  const peak = Math.max(1, ...weekly.map(w => w.total))
+  // Only one of the two halves may have data; with neither there is nothing to show.
+  if (!mix.ok && !load.ok && !weekly.length) return null
+
+  return <div className="card">
+    <div className="row between">
+      <h3>{t('Sleep & load detail')}</h3>
+      <Segmented className="seg-range" value={range} onChange={setRange}
+        options={[{ value: 30, label: '1M' }, { value: 90, label: '3M' }]} />
+    </div>
+
+    {mix.ok ? <>
+      <h4 className="sec">{t('What your sleep is made of')}</h4>
+      <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', gap: 2 }}>
+        {STAGES.map(k => <div key={k} style={{ width: mix.avg[k].pct + '%', background: STAGE_FILL[k] }} />)}
+      </div>
+      <div className="row" style={{ gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
+        {STAGES.map(k => {
+          const s = mix.shift[k]
+          // Coloured only where it moved: a 3-minute wobble across half a window is not a
+          // trend, and painting it green or red would say it was.
+          const moved = Math.abs(s.min) >= 8
+          return <span key={k} className="small">
+            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: STAGE_FILL[k], marginRight: 5 }} />
+            {t(STAGE_NAME[k])} <b>{fmtDuration(mix.avg[k].min)}</b>
+            <span className="muted"> {mix.avg[k].pct}%</span>
+            {moved && <span style={{ color: s.min > 0 ? 'var(--green-ink)' : 'var(--red-ink)' }}>
+              {' '}{s.min > 0 ? '+' : ''}{Math.round(s.min)}m
+            </span>}
+          </span>
+        })}
+      </div>
+      <div className="muted small" style={{ marginTop: 6, lineHeight: 1.45 }}>
+        {t('Average over {0} nights. The change compares the recent half of the window with the earlier half — total time asleep can hold steady while the mix underneath it shifts.', mix.nights)}
+      </div>
+    </> : <div className="muted small" style={{ marginTop: 6, lineHeight: 1.45 }}>
+      {t('Sleep stages need {0} nights before a mix is worth showing — there are {1} in this range.', mix.need, mix.nights)}
+    </div>}
+
+    {shortfall && <div className="row between" style={{ marginTop: 12 }}>
+      <span className="muted small">{t('Met your sleep need')}</span>
+      <span className="small"><b>{shortfall.met}</b> <span className="muted">{t('of {0} nights', shortfall.nights)}</span>
+        {shortfall.avg > 0 && <span className="muted"> · {t('short by {0} on average', fmtDuration(shortfall.avg))}</span>}</span>
+    </div>}
+
+    {load.ok && <>
+      <h4 className="sec">{t('Training load')}</h4>
+      <div className="row" style={{ gap: 18, alignItems: 'baseline' }}>
+        <div style={{ fontSize: 30, fontWeight: 700, lineHeight: 1, color: LOAD_INK[load.band.key] }}>
+          {load.ratio.toFixed(2)}<span style={{ fontSize: 15 }}>×</span>
+        </div>
+        <div className="muted small" style={{ lineHeight: 1.45 }}>
+          <span style={{ color: LOAD_INK[load.band.key] }}>{t(load.band.label)}</span><br />
+          {t('this week {0} vs your month {1}', load.acute, load.chronic)}
+        </div>
+      </div>
+      {/* Said plainly because the construct invites the other reading: the acute window sits
+          inside the chronic one, so the two are coupled and the popular "danger zone"
+          thresholds have not survived re-analysis. Describing load is defensible; predicting
+          an injury from it is not. */}
+      <div className="muted small" style={{ marginTop: 6, lineHeight: 1.45 }}>
+        {t('Your average daily strain over the last week against the last four weeks. It describes whether you are ramping or easing — it is not a measure of injury risk, and nothing here can tell you whether to train.')}
+      </div>
+    </>}
+
+    {weekly.length > 1 && <>
+      <h4 className="sec">{t('Strain by week')}</h4>
+      <div className="row" style={{ gap: 6, alignItems: 'flex-end', height: 70 }}>
+        {weekly.map(w => <div key={w.week} style={{ flex: 1, textAlign: 'center' }}>
+          <div title={`${w.total} over ${w.days}d`} style={{
+            height: Math.max(3, (w.total / peak) * 56), borderRadius: 3,
+            // Partial weeks are drawn hollow, so a short bar is not read as a collapse in
+            // training. Both ends of the range can be partial — the newest week is still
+            // running, and the oldest is usually cut off by where the window starts.
+            background: w.days >= 7 ? 'var(--orange)' : 'transparent',
+            boxShadow: w.days >= 7 ? 'none' : 'inset 0 0 0 1.5px var(--orange)',
+          }} />
+          <div className="muted" style={{ fontSize: 10, marginTop: 4 }}>{Math.round(w.total)}</div>
+        </div>)}
+      </div>
+      <div className="muted small" style={{ marginTop: 4 }}>
+        {t('Summed, not averaged — a hard week with rest days is not the same as seven moderate ones. A hollow bar is a partial week: still running, or cut off by the start of the range.')}
+      </div>
+    </>}
+  </div>
+}
+
 export default function Stats() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
@@ -547,6 +649,8 @@ export default function Stats() {
     </div>
 
     <RecoveryCard S={S} />
+
+    <SleepLoadCard S={S} />
 
     <TrainingRecoveryCard S={S} />
 

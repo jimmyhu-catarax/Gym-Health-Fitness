@@ -79,6 +79,12 @@ _Last updated: 2026-08-25 (recovery & sleep card; loop running)_
   **#6** (product name), **#10** (whether to publish fork-owned images), **#12** (the Whoop /
   OpenStrap survey — licences, verbatim CSV schemas, API reference; *extend it, do not
   re-survey*).
+- **Sleep & load detail** (`lib/trends.js`) answers the two questions a single trend line
+  cannot: what your sleep is made of and whether it is shifting, and whether this week is
+  heavy against your own last month. The load ratio is the acute:chronic construct and is
+  reported as *load balance only* — Impellizzeri et al. (2020) showed the windows are
+  mathematically coupled and the popular risk thresholds did not survive re-analysis, so a
+  test asserts the band labels carry no risk language.
 - **Next step:** everything buildable on data that already parses is done — trends, the
   training join, readiness on the Start screen, and `docs/WHOOP.md` as the how-to. What
   remains is **blocked on the owner, not on a session**: importing a real export (the
