@@ -103,6 +103,32 @@ Three rules keep the number honest:
 The acute-against-chronic read on it carries the same caveat as the strain one: it describes
 whether you are ramping or easing, and it is not a measure of injury risk.
 
+## Where you see it
+
+Depth lives on Stats. The number you actually act on lives on Home, in a three-tile strip above
+today's session: recovery, last night's sleep, and the most recent completed day's strain.
+
+The rule that strip enforces is freshness, because every number in it is implicitly a claim
+about *this morning*:
+
+| Metric | Describes | Shown while |
+| --- | --- | --- |
+| Recovery | the morning it was scored | at most a day old |
+| Sleep | one night | at most a day old |
+| Strain | a **completed** day | at most a day old — so the newest complete row is normally yesterday's, and one day old is the healthy state here, not staleness |
+
+Each is gated on its own date rather than on the newest row in the file. A band worn last night
+but not the night before has fresh sleep and stale strain, and showing the sleep is right while
+showing the strain is not.
+
+Two empty states, deliberately different. No import at all renders nothing — a lifter without a
+band should not be handed a card explaining what they are missing, and Stats already carries the
+invitation. Data that has *gone* stale says so and links to the import, because the fix there is
+a sync; blanking both the same way would tell someone who imported last month that the feature
+does not exist. See `lib/brief.js`.
+
+The strip reports and does not prescribe, for the reason at the bottom of this page.
+
 ## Sources
 
 | Model | Used for | Source |

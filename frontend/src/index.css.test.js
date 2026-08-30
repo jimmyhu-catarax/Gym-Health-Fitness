@@ -107,6 +107,10 @@ const PAIRS = [
   ['tab label (inactive)',     'var(--label-3)',    'var(--bg-el)',     'var(--bg)',      3.0],
   ['danger text on card',      'var(--red-ink)',    'var(--surface)',   'var(--bg)',      4.5],
   ['warning text on card',     'var(--orange-ink)', 'var(--surface)',   'var(--bg)',      4.5],
+  // Recovery zone inks land on the nested fill of the Home morning strip, never on the card.
+  ['recovered on surface-2',   'var(--green-ink)',  'var(--surface-2)', 'var(--bg)',      4.5],
+  ['moderate on surface-2',    'var(--yellow-ink)', 'var(--surface-2)', 'var(--bg)',      4.5],
+  ['run down on surface-2',    'var(--red-ink)',    'var(--surface-2)', 'var(--bg)',      4.5],
   ['primary button label',     'var(--on-acc)',     'var(--acc)',       'var(--bg)',      3.0],
   ['pressed primary label',    'var(--on-acc)',     'var(--acc-2)',     'var(--bg)',      3.0],
   ['icon tile glyph',          'var(--on-acc)',     'var(--acc)',       'var(--bg)',      3.0],

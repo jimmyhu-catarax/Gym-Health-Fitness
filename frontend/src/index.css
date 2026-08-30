@@ -848,6 +848,15 @@ h4.sec{
 .tile .v{font-size:26px;font-weight:600;letter-spacing:-.026em;margin-top:5px;line-height:1.1}
 .tile.tappable:active{background:var(--surface-2)}
 
+/* Morning strip on Home — three across, nested inside a card rather than standing alone.
+   --surface-2 is the nested fill, so the tiles read as one block instead of cards-in-a-card;
+   index.css.test.js measures the three recovery inks against it. */
+.tiles.three{grid-template-columns:repeat(3,1fr);gap:8px}
+.tiles.three .tile{background:var(--surface-2);box-shadow:none;padding:11px 10px}
+.tiles.three .tile .l{font-size:12px;gap:4px}
+.tiles.three .tile .v{font-size:clamp(17px,5.4vw,22px);margin-top:4px;white-space:nowrap}
+.tiles.three .tile .small{font-size:clamp(11px,3.4vw,13px)}
+
 /* --- PR badge --- */
 .pr{
   display:inline-flex;align-items:center;gap:4px;

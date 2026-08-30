@@ -9,6 +9,7 @@ import {
 } from './effort.js'
 import { effortOf, modeOf } from './history.js'
 import { dailyLoad, sessionLoad } from './session-load.js'
+import { morningBrief } from './brief.js'
 import { trendDetail } from './trends.js'
 
 const S = buildDemoState()
@@ -204,5 +205,18 @@ describe('demo lifting load', () => {
   it('reads a session load straight off a workout', () => {
     const w = S.workouts[S.workouts.length - 1]
     expect(sessionLoad(w)).toBeGreaterThan(0)
+  })
+
+  it('gives the home screen all three of this morning\u2019s numbers', () => {
+    // The demo runs the metrics up to today, so the strip should be fully populated rather
+    // than sitting in its stale state — that state is what a visitor would see if the seed
+    // ever stopped at yesterday.
+    const b = morningBrief(S)
+    expect(b.has).toBe(true)
+    expect(b.any).toBe(true)
+    expect(b.recovery).not.toBeNull()
+    expect(b.sleep.dur).toBeGreaterThan(0)
+    expect(b.strain.value).toBeGreaterThan(0)
+    expect(b.recovery.src).toBe('whoop')
   })
 })
