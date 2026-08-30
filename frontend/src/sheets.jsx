@@ -242,6 +242,14 @@ function ImportSummary({ parsed, close }) {
   const fields = parsed.fields || [...new Set(metrics.flatMap(Object.keys))]
     .filter(k => !['d', 't', 'src'].includes(k))
 
+  // Routines rebuilt out of the sessions (derive-routines.js). This is an inference, so it
+  // gets the same treatment as a unit conversion: shown, named and refusable, on the last
+  // screen before anything is written.
+  const routines = parsed.routines || []
+  const unnamed = (parsed.skippedRoutines || []).filter(r => r.why === 'generic')
+    .reduce((a, r) => a + r.sessions, 0)
+  const refused = (parsed.skippedRoutines || []).filter(r => r.why !== 'generic')
+
   const have = isMetrics ? metricHave
     : isBW ? parsed.bodyweight.filter(b => st.bodyweight.some(x => x.d === b.d)).length
       : parsed.workouts.filter(w => st.workouts.some(x => x.d === w.d)).length
@@ -260,7 +268,8 @@ function ImportSummary({ parsed, close }) {
     close()
     toast(isMetrics ? t('{0} days of health data imported', metricFresh)
       : isBW ? t('{0} weigh-ins imported', res.added)
-        : t('{0} workouts imported', res.added))
+        : res.routines ? t('{0} workouts and {1} routines imported', res.added, res.routines)
+          : t('{0} workouts imported', res.added))
   }
 
   return <>
@@ -323,6 +332,27 @@ function ImportSummary({ parsed, close }) {
         ? '{0} sets bring an {1} with them — switch on Effort per set in Settings to see it.'
         : '{0} sets bring an {1} with them.',
       parsed.rirSets || parsed.rpeSets, parsed.rirSets ? 'RIR' : 'RPE')}
+    </div>}
+    {routines.length > 0 && <>
+      <h4 className="sec">{t('Routines rebuilt from these sessions')}</h4>
+      <div className="list" style={{ marginBottom: 8 }}>
+        {routines.map(r => <div key={r.id} className="item">
+          <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
+          <div className="grow">
+            <div className="tt">{r.name}</div>
+            <div className="ss">{exCount(r.ex.length)} · {t('from {0} sessions', r.sessions)}</div>
+          </div>
+        </div>)}
+      </div>
+      <div className="small dim" style={{ marginBottom: 10 }}>
+        {t('Your history records what you trained, never what you planned. These are the plans behind it — you can edit or delete any of them afterwards.')}
+      </div>
+    </>}
+    {!isBW && !isMetrics && unnamed > 0 && <div className="small dim" style={{ marginBottom: 10 }}>
+      {t('{0} sessions carry no routine name of their own, so no routine was rebuilt from them.', unnamed)}
+    </div>}
+    {refused.length > 0 && <div className="small dim" style={{ marginBottom: 10 }}>
+      {t('Left as history only: {0}.', refused.map(r => r.name).join(', '))}
     </div>}
     {!isBW && !isMetrics && parsed.unmatchedNames.length > 0 && <>
       <h4 className="sec">{t('Not in the library — added as your own exercises')}</h4>

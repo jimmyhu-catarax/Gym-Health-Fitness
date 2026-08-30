@@ -81,7 +81,7 @@ as a home-screen app, passkey sign-in, offline support, sync across your phone a
 - 🛠️ **Admin dashboard** (optional) — for whoever runs the instance: who's training right now, per-user history, disable accounts, and invite-only signup. Off by default, so a fresh instance stays open with no admin
 - 🎨 **Designed, not assembled** — light/dark themes and 8 accent colors saved to your profile, over a hand-drawn icon set instead of emoji, so it looks the same on every phone
 - 🌍 **12 languages** — full UI translation (EN, DE, ES, FR, IT, PT, PL, TR, RU, ZH, KO, HI); exercise instructions localized in 10 of them, loaded on demand so the app stays fast
-- 📥 **Bring your history with you** — import from **FitNotes** (Android and iOS), **Strong**, **Hevy** and **Whoop**, or body weight straight out of **Apple Health**, **Google Fit** (Google Takeout) and **Health Connect**. Drop the `.zip` in as it came — Takeout, Whoop and Health Connect archives are read directly, including Health Connect's SQLite backup. Exercise names are matched against the library and anything unrecognised becomes one of your own exercises, so nothing in the file is dropped, and every import shows you what it found before it writes anything
+- 📥 **Bring your history with you** — import from **FitNotes** (Android and iOS), **Strong**, **Hevy** and **Whoop**, or body weight straight out of **Apple Health**, **Google Fit** (Google Takeout) and **Health Connect**. Drop the `.zip` in as it came — Takeout, Whoop and Health Connect archives are read directly, including Health Connect's SQLite backup. Exercise names are matched against the library and anything unrecognised becomes one of your own exercises, so nothing in the file is dropped, and every import shows you what it found before it writes anything. Where the file names its workouts, **your routines are rebuilt too** — Hevy and Strong export what you did but never what you planned, so the splits are read back out of the sessions and your history arrives with the plans behind it — **[docs/IMPORTING.md](docs/IMPORTING.md)**
 - 📦 **Yours to keep** — one-tap JSON export/import, guest mode, **no telemetry**
 - 📱 **Standalone Android app** — the whole tracker as a sideloadable APK: no account, no server, data on the phone, native workout reminders ([download](https://opengym.duarte-santos.ch))
 
@@ -167,7 +167,7 @@ Rough, community-driven — ideas and PRs welcome:
 - [x] Estimated 1RM per exercise
 - [ ] Percentage / training-max programming (5/3/1-style) on top of the progression engine
 - [ ] More starter plans (upper/lower, full-body, 5×5)
-- [x] Importers from FitNotes / Strong / Hevy (including the RPE they record), and body weight from Apple Health
+- [x] Importers from FitNotes / Strong / Hevy (including the RPE they record, and the routines behind the sessions), and body weight from Apple Health
 - [x] Effort per set — RIR or RPE, whichever scale you think in
 - [ ] Body measurements (waist, arms…) alongside weight
 - [ ] Per-exercise notes & plate calculator
