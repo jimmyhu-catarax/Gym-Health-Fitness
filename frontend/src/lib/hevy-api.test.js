@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { workoutsToCsv, fetchPage, fetchWorkouts, syncHevy, HevyError, HEVY_MESSAGE } from './hevy-api.js'
+import { workoutsToCsv, fetchPage, fetchWorkouts, syncHevy, HevyError, HEVY_MESSAGE, COVERAGE_FLOOR } from './hevy-api.js'
 import { parseWorkoutCSV, detectSource, parseCSV } from './import-csv.js'
 
 /** One workout in the shape Hevy documents. */
@@ -209,5 +209,95 @@ describe('syncHevy', () => {
     for (const code of ['no-key', 'bad-key', 'needs-pro', 'rate-limit', 'offline', 'http', 'shape', 'empty']) {
       expect(HEVY_MESSAGE[code]).toBeTruthy()
     }
+  })
+})
+
+describe('coverage, the silent-failure guard', () => {
+  it('counts what it actually read off each set', () => {
+    const r = workoutsToCsv([workout()])
+    expect(r.sets).toBe(3)
+    expect(r.measured).toBe(3)
+    expect(r.coverage.weight).toBe(3)
+    expect(r.coverage.reps).toBe(3)
+    expect(r.coverage.rpe).toBe(2)      // the warm-up set carries none
+    expect(r.coverage.duration).toBe(0)
+  })
+
+  it('names the fields it did not read, which is where a rename shows up', () => {
+    const renamed = workout({
+      exercises: [{ title: 'Bench Press (Barbell)', sets: [{ reps: 8, weight_kilograms: 80, tempo: '3010' }] }],
+    })
+    const r = workoutsToCsv([renamed])
+    expect(r.unread).toContain('weight_kilograms')
+    expect(r.unread).toContain('tempo')
+    expect(r.coverage.weight).toBe(0)   // the rename cost us the weight, and it says so
+  })
+
+  it('does not flag a field it does read under another spelling', () => {
+    const r = workoutsToCsv([workout({
+      exercises: [{ name: 'Squat (Barbell)', sets: [{ weightKg: 100, repetitions: 5 }] }],
+    })])
+    expect(r.unread).toEqual([])
+    expect(r.measured).toBe(1)
+  })
+
+  it('refuses outright when workouts resolve but not one set carries a number', () => {
+    // The dangerous shape: the envelope reads, the sets do not. Importing it files a whole
+    // history as empty sets, which no summary screen would make obvious.
+    const gutted = workout({
+      exercises: [{ title: 'Bench Press (Barbell)', sets: [{ load: 80, count: 8 }, { load: 80, count: 7 }] }],
+    })
+    let thrown = null
+    try { workoutsToCsv([gutted]) } catch (e) { thrown = e }
+    expect(thrown).toBeInstanceOf(HevyError)
+    expect(thrown.code).toBe('fields')
+    expect(thrown.message).toMatch(/load/)     // the names it could not read are in the message
+    expect(thrown.message).toMatch(/count/)
+  })
+
+  it('reports a partial read rather than refusing it — that is the caller’s call', () => {
+    const half = [
+      workout(),                                                    // 3 good sets
+      workout({ id: 'w2', exercises: [{ title: 'Row (Cable)', sets: [{ load: 60 }, { load: 60 }, { load: 60 }, { load: 60 }] }] }),
+    ]
+    const r = workoutsToCsv(half)
+    expect(r.sets).toBe(7)
+    expect(r.measured).toBe(3)
+    expect(r.measured / r.sets).toBeLessThan(COVERAGE_FLOOR)  // the sheet stops and asks
+    expect(r.unread).toContain('load')
+  })
+
+  it('has a floor between "some" and "all", so a clean sync never stops to ask', () => {
+    expect(COVERAGE_FLOOR).toBeGreaterThan(0)
+    expect(COVERAGE_FLOOR).toBeLessThan(1)
+    const clean = workoutsToCsv([workout()])
+    expect(clean.measured / clean.sets).toBeGreaterThanOrEqual(COVERAGE_FLOOR)
+  })
+})
+
+describe('the API mapper and the CSV reader agree', () => {
+  // The strongest check available without a Pro key: the same session, once as Hevy's own
+  // export and once through the API mapper, must land in state as the same workout. If the
+  // two ever disagree about a column, one of them is wrong.
+  const EXPORT_CSV = [
+    'title,start_time,end_time,description,exercise_title,superset_id,exercise_notes,set_index,set_type,weight_kg,reps,distance_km,duration_seconds,rpe',
+    'Push Day,2026-08-24T17:05:00Z,2026-08-24T18:02:00Z,,Bench Press (Barbell),,,0,warmup,40,10,,,',
+    'Push Day,2026-08-24T17:05:00Z,2026-08-24T18:02:00Z,,Bench Press (Barbell),,,1,normal,80,8,,,8',
+    'Push Day,2026-08-24T17:05:00Z,2026-08-24T18:02:00Z,,Bench Press (Barbell),,,2,normal,80,7,,,9',
+  ].join('\n')
+
+  it('produces the same state from the API as from the export of the same session', () => {
+    const fromFile = parseWorkoutCSV(EXPORT_CSV, { unit: 'kg' })
+    const fromApi = parseWorkoutCSV(workoutsToCsv([workout()]).csv, { unit: 'kg' })
+
+    const shape = p => p.workouts.map(w => ({
+      d: w.d, name: w.name,
+      entries: w.entries.map(e => ({ id: e.id, sets: e.sets })),
+    }))
+    expect(shape(fromApi)).toEqual(shape(fromFile))
+    expect(fromApi.source).toBe(fromFile.source)
+    expect(fromApi.warmups).toBe(fromFile.warmups)
+    expect(fromApi.rpeSets).toBe(fromFile.rpeSets)
+    expect(fromApi.matched).toBe(fromFile.matched)
   })
 })

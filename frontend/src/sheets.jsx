@@ -25,7 +25,7 @@ import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
 import { MOBILE, shareExport } from './lib/mobile.js'
 import { chronoAge } from './lib/fitness-age.js'
-import { syncHevy, HEVY_MESSAGE } from './lib/hevy-api.js'
+import { syncHevy, HEVY_MESSAGE, COVERAGE_FLOOR } from './lib/hevy-api.js'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -495,21 +495,51 @@ function HevySheet({ close }) {
   const [note, setNote] = useState(null)
   const [err, setErr] = useState(null)
 
+  const [review, setReview] = useState(null)
+
+  const go = (r, parsed) => {
+    update(s => { s.hevyKey = key.trim() })
+    close()
+    // Say so rather than quietly importing a prefix of somebody's history.
+    if (r.truncated) toast(t('Fetched the most recent {0} workouts — sync again for the rest', r.workouts))
+    ui().openSheet(c2 => <ImportSummary parsed={parsed} close={c2} />)
+  }
+
   const run = async () => {
     setBusy(true); setErr(null); setNote(null)
     try {
       const r = await syncHevy(key, { onProgress: p => setNote(t('{0} workouts so far…', p.count)) })
       const parsed = parseImport(r.csv, { unit: S().unit })
       if (parsed.error || importIsEmpty(parsed)) { setErr(t(HEVY_MESSAGE.shape)); setBusy(false); return }
-      update(s => { s.hevyKey = key.trim() })
-      close()
-      // Say so rather than quietly importing a prefix of somebody's history.
-      if (r.truncated) toast(t('Fetched the most recent {0} workouts — sync again for the rest', r.workouts))
-      ui().openSheet(c2 => <ImportSummary parsed={parsed} close={c2} />)
+      // Most sets carried a number: nothing to query, straight to the normal confirm sheet.
+      // A low share means the mapper read Hevy's envelope but not its sets, which imports a
+      // history of empty ones — quiet enough that nobody would catch it on the summary alone.
+      if (r.sets && r.measured / r.sets >= COVERAGE_FLOOR) return go(r, parsed)
+      setReview({ r, parsed }); setBusy(false)
     } catch (e) {
       setErr(t(HEVY_MESSAGE[e && e.code] || HEVY_MESSAGE.http))
       setBusy(false)
     }
+  }
+
+  if (review) {
+    const { r } = review
+    const pct = n => Math.round((n / r.sets) * 100) + '%'
+    return <>
+      <h3>{t('Check this before importing')}</h3>
+      <div className="muted small" style={{ lineHeight: 1.5, marginBottom: 10 }}>
+        {t('Hevy sent {0} workouts, but only {1} of their {2} sets carried a number this could read. That usually means Hevy has renamed a field — importing now would file those sets as empty.', r.workouts, r.measured, r.sets)}
+      </div>
+      <div className="small" style={{ lineHeight: 1.7, marginBottom: 10 }}>
+        {t('Weights')}: <b>{pct(r.coverage.weight)}</b> · {t('Reps')}: <b>{pct(r.coverage.reps)}</b> · {t('Duration')}: <b>{pct(r.coverage.duration)}</b> · {t('Distance')}: <b>{pct(r.coverage.distance)}</b>
+      </div>
+      {!!r.unread.length && <div className="dim small" style={{ lineHeight: 1.5, marginBottom: 12 }}>
+        {t('Fields it did not read:')} <code>{r.unread.join(', ')}</code>
+      </div>}
+      <Button variant="primary" onClick={() => go(review.r, review.parsed)}>{t('Show me what it found')}</Button>
+      <div style={{ height: 8 }} />
+      <Button onClick={() => { setReview(null) }}>{t('Back')}</Button>
+    </>
   }
 
   return <>

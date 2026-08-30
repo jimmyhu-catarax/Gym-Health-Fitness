@@ -91,13 +91,44 @@ Things worth knowing:
   workout resolves both a time and a named exercise is refused rather than turned into an empty
   or a wrong import.
 
-### Not verified against a live account
+### The failure this actually guards against
 
-The endpoint, the `api-key` header and the CORS headers were checked against the real API. The
-response *body* was not — that needs a Pro key. The mapper is written to refuse what it does
-not recognise rather than guess, and the confirm sheet shows you the dates and counts before
-anything is written, so a shape mismatch should surface as a refusal or an obviously wrong
-summary rather than a silently wrong log. Check the first sync's summary before confirming it.
+A response that reads as *nothing* is easy — it gets refused and you see why. The dangerous one
+is a response that reads as *almost* something: the envelope resolves, the workouts and
+exercises resolve, and then `weight_kg` turns out to have been renamed, so a decade of training
+imports as empty sets. No summary screen makes that obvious, because the workout count and the
+dates all look right.
+
+So every set is counted. The sync reports how many of them yielded a weight, a rep count, a
+duration or a distance, and which field names it did not read at all:
+
+- **None of them** — refused outright, with the unread field names in the message. Nothing is
+  written.
+- **Fewer than half** — the sync stops and shows you the coverage before the normal confirm
+  sheet: *"Hevy sent 12 workouts, but only 9 of their 140 sets carried a number this could
+  read"*, the per-field percentages, and the fields it did not read. You can still continue;
+  it just will not happen quietly.
+- **Most of them** — straight through to the usual summary, no extra step.
+
+That list of unread field names is the useful part if this ever breaks: it is exactly what a
+bug report against `lib/hevy-api.js` needs.
+
+### What has and has not been verified
+
+Checked against the real API: the endpoint, the `api-key` header, and the CORS headers that let
+the browser call it directly.
+
+Checked in a browser against a stubbed response, through the real UI: a good sync writes the
+workout with its warm-up flags and RPEs intact and stores the key; a renamed-field response is
+refused; a half-readable one raises the coverage screen. There is also a test asserting that
+the same session, taken once through the API mapper and once as Hevy's own CSV export, lands
+in state as byte-identical workouts — if the two ever disagree about a column, one of them is
+wrong and the suite says so.
+
+**Not checked: Hevy's actual response body**, which needs a Pro key. Everything above is built
+so that a mismatch there surfaces as a refusal or a coverage warning rather than a silently
+wrong log — but the first sync from a real account is still the one that proves it. Read its
+summary before confirming.
 
 ## Body weight
 

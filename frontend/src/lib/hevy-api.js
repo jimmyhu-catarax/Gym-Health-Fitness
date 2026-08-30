@@ -146,18 +146,41 @@ const stamp = v => {
   return isFinite(ms) ? new Date(ms).toISOString() : null
 }
 
+// Every set-level name this reads, under any spelling. What is left over on a real set object
+// is reported back as `unread` — not as an error, since Hevy carries fields this app has no
+// use for, but as the first place to look when the numbers come out wrong.
+const KNOWN_SET_KEYS = new Set([
+  'index', 'set_index', 'type', 'set_type', 'setType',
+  'weight_kg', 'weightKg', 'weight', 'reps', 'repetitions', 'rpe',
+  'duration_seconds', 'durationSeconds', 'duration',
+  'distance_meters', 'distanceMeters', 'distance_km', 'distanceKm',
+])
+
+/** Below this share of sets carrying any measurement at all, the caller should stop and look. */
+export const COVERAGE_FLOOR = 0.5
+
 /**
  * Hevy's JSON, as the CSV Hevy would have exported.
  *
  * Refuses rather than guessing: if not one workout in the response resolves both a start time
  * and a named exercise, the shape is not what this understands and the caller is told so.
  *
- * @returns {{csv:string, workouts:number, sets:number}}
+ * The subtler failure is the one this reports on rather than throws for. A response whose
+ * workouts and exercises resolve but whose *sets* do not — `weight_kg` renamed, say — would
+ * otherwise import a year of training as empty sets, which is the silent-wrong-numbers case
+ * that matters more than a refusal. So every set is counted: how many yielded a weight, reps,
+ * a duration, a distance, and what field names went unread. Zero measurements across the whole
+ * response is refused outright; a low share is handed back for the UI to put in front of the
+ * user before anything is written.
+ *
+ * @returns {{csv:string, workouts:number, sets:number, coverage:object, unread:string[], measured:number}}
  */
 export function workoutsToCsv(raw) {
   const list = Array.isArray(raw) ? raw : []
   const lines = [HEVY_CSV_HEADER.join(',')]
-  let sets = 0, kept = 0
+  let sets = 0, kept = 0, measured = 0
+  const coverage = { weight: 0, reps: 0, duration: 0, distance: 0, rpe: 0 }
+  const unread = new Set()
 
   for (const w of list) {
     const start = stamp(pick(w, ['start_time', 'startTime', 'start', 'created_at']))
@@ -190,6 +213,18 @@ export function workoutsToCsv(raw) {
         const km = kmDirect != null ? kmDirect : metres != null ? metres / 1000 : null
         const type = pick(s, ['type', 'set_type', 'setType']) ?? ''
 
+        if (kg) coverage.weight++
+        if (reps) coverage.reps++
+        if (secs) coverage.duration++
+        if (km) coverage.distance++
+        if (rpe != null) coverage.rpe++
+        // A set is "measured" if anything at all came off it. A set with none is the one that
+        // parseWorkoutCSV will skip, and a response made entirely of them is the silent failure.
+        if (kg || reps || secs || km) measured++
+        if (s && typeof s === 'object') {
+          for (const k of Object.keys(s)) if (!KNOWN_SET_KEYS.has(k)) unread.add(k)
+        }
+
         lines.push([
           title, start, end ?? '', desc, exTitle, superset ?? '', exNotes,
           pick(s, ['index', 'set_index']) ?? i, type,
@@ -203,7 +238,18 @@ export function workoutsToCsv(raw) {
   }
 
   if (!kept) throw new HevyError('shape', 'Nothing in that response looked like a Hevy workout')
-  return { csv: lines.join('\n'), workouts: kept, sets }
+  // Workouts and exercises read, but not one number came off any set. Importing that would
+  // file the whole history as empty sets, so it is refused with the names it did not read —
+  // which is exactly the list somebody needs to file a bug against this mapper.
+  if (sets && !measured) {
+    throw new HevyError('fields', `Found ${sets} sets but could not read a weight, a rep count, `
+      + `a duration or a distance from any of them`
+      + (unread.size ? ` (unread fields: ${[...unread].sort().join(', ')})` : ''))
+  }
+  return {
+    csv: lines.join('\n'), workouts: kept, sets, measured, coverage,
+    unread: [...unread].sort(),
+  }
 }
 
 /** The whole round trip: key in, CSV text out, ready for parseWorkoutCSV. */
@@ -222,5 +268,6 @@ export const HEVY_MESSAGE = {
   offline: 'Could not reach Hevy. Check your connection and try again.',
   http: 'Hevy returned an error',
   shape: "Hevy's response was not in a shape this understands — your CSV export still imports.",
+  fields: 'Hevy sent workouts, but none of their sets carried a weight, reps, a duration or a distance. Nothing was imported — your CSV export still works.',
   empty: 'That Hevy account has no workouts yet',
 }
