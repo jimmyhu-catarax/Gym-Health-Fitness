@@ -38,6 +38,22 @@ sessions are then filed under the routine they came from.
 The summary sheet lists what it rebuilt before anything is written, and rebuilt routines are
 ordinary routines afterwards — edit them, delete them, put them on the week.
 
+**A Hevy API sync does better than rebuilding.** Hevy hands over the routines themselves, so
+where a key is available the real routine replaces the reconstruction and the sheet says which
+you are looking at. Two things only the real ones can do:
+
+- **Show a routine you have never trained.** A rebuild needs three sessions before it can see
+  a plan, so the split you wrote last night is invisible to it — and that is the plan you most
+  want on today's screen.
+- **Keep what you meant.** A median over sessions says what you did. It cannot tell a plan of
+  5×5 apart from five sessions that happened to average five.
+
+Where a real routine and a rebuilt one share a name, the real one takes the rebuilt one's
+place and keeps its sessions, so nothing you trained comes unstuck. A rebuilt routine Hevy no
+longer has survives: your sessions still point at it, and it is still the best account of
+them. A routine **already in your plan** under that name is never overwritten — yours may have
+been edited here, so yours is kept and the sheet says so.
+
 It would rather rebuild nothing than rebuild a plan you have never trained, so it refuses in
 three cases, and says so:
 
@@ -83,9 +99,17 @@ Things worth knowing:
 - **Your browser calls Hevy directly.** Hevy sends `access-control-allow-origin: *` and allows
   the `api-key` header, so nothing proxies through this app's Node service — it stays the
   passkey-and-push service the README describes, and your key never reaches it.
-- **Every sync refetches your whole history**, up to 4000 workouts. Hevy documents an events
-  endpoint for incremental sync, but its response shape is not verified here, and a guessed
-  cursor that silently skips a fortnight is a worse bug than a slow sync.
+- **Your routines come across too**, from `GET /v1/routines` — the real ones, not the rebuild
+  described above. If that call fails the sync still completes: the workouts are the training
+  log and the routines are the plan on top of it, so a routines endpoint that 404s costs you
+  the plan and not the history. The sheet says the routines could not be read, so a sync with
+  no routines in it cannot be mistaken for an account that has none.
+- **Every sync refetches your whole history**, up to 4000 workouts. Hevy does document an
+  events endpoint for incremental sync (`GET /v1/workouts/events?since=`), and its shape is
+  published: paged, newest first, carrying updates *and* deletions. Honouring a deletion means
+  knowing which local workout it refers to, and the sync bridges through Hevy's own CSV export,
+  which has no id column — so nothing here can currently tell which workout was deleted.
+  Day-level dedup makes the refetch harmless; it just costs requests.
 - **The response is read defensively.** Each field is looked up under its documented name and a
   couple of plausible spellings, then sanity-checked against its value; a response where no
   workout resolves both a time and a named exercise is refused rather than turned into an empty

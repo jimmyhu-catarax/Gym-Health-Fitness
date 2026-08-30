@@ -538,11 +538,17 @@ export function mergeImport(S, parsed) {
   const wanted = new Set(fresh.map(w => w.routineId).filter(Boolean))
   const newRoutines = []
   for (const r of parsed.routines || []) {
-    if (!wanted.has(r.id)) continue
+    // The "no new sessions, no routine" rule is about *derived* routines: those are read
+    // back out of the sessions, so one with nothing fresh behind it is a plan already here.
+    // A real routine (hevy-routines.js) is not derived from these sessions at all — it is
+    // the plan the other app holds, and the one most worth having, written last night and
+    // never trained, has no sessions by definition. It is added on its own merit; the name
+    // check below still stops it duplicating something already in the plan.
+    if (!r.real && !wanted.has(r.id)) continue
     const existing = byName.get(normRoutineName(r.name))
     if (existing) { fresh.forEach(w => { if (w.routineId === r.id) w.routineId = existing }); continue }
-    // `sessions` is evidence for the summary sheet, not state worth syncing.
-    const { sessions, ...routine } = r
+    // `sessions` and `real` are evidence for the summary sheet, not state worth syncing.
+    const { sessions, real, ...routine } = r
     newRoutines.push(routine)
     byName.set(normRoutineName(r.name), r.id)
   }

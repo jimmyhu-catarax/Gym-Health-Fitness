@@ -70,14 +70,14 @@ const listOf = (o, names) => {
  * @param {number} page      1-based, as the API counts
  * @returns {Promise<{workouts:Array, pageCount:number}>}
  */
-export async function fetchPage(key, page = 1, { pageSize = PAGE_SIZE, base = HEVY_BASE, fetchFn } = {}) {
+export async function fetchPage(key, page = 1, { pageSize = PAGE_SIZE, base = HEVY_BASE, fetchFn, resource = 'workouts' } = {}) {
   const f = fetchFn || (typeof fetch === 'function' ? fetch : null)
   if (!f) throw new HevyError('offline', 'No network available')
   if (!key || !String(key).trim()) throw new HevyError('no-key', 'No API key')
 
   let res
   try {
-    res = await f(`${base}/workouts?page=${page}&pageSize=${pageSize}`, {
+    res = await f(`${base}/${resource}?page=${page}&pageSize=${pageSize}`, {
       headers: { 'api-key': String(key).trim(), accept: 'application/json' },
     })
   } catch (e) {
@@ -93,18 +93,24 @@ export async function fetchPage(key, page = 1, { pageSize = PAGE_SIZE, base = HE
   let body
   try { body = await res.json() } catch (e) { throw new HevyError('shape', 'Hevy returned something unreadable') }
 
-  // The envelope has moved before; take the workouts wherever they are rather than pinning
-  // one spelling, but insist they are actually a list.
-  const workouts = listOf(body, ['workouts', 'data', 'results', 'items'])
-  if (!workouts.length && !Array.isArray(body)) {
+  // The envelope has moved before; take the items wherever they are rather than pinning
+  // one spelling, but insist they are actually a list. The resource's own name is tried
+  // first, so /routines reads `routines` and /workouts reads `workouts`.
+  const names = [resource, 'data', 'results', 'items']
+  const items = listOf(body, names)
+  if (!items.length && !Array.isArray(body)) {
     const pc = numOr(pick(body, ['page_count', 'pageCount', 'total_pages']), 0, 1e6)
     // An empty page is only legitimate when the envelope itself parsed.
-    if (pc === null && pick(body, ['workouts', 'data', 'results', 'items']) === undefined) {
+    if (pc === null && pick(body, names) === undefined) {
       throw new HevyError('shape', 'Hevy returned an unfamiliar response')
     }
   }
+  const list = Array.isArray(body) ? body : items
+  // `workouts` is the original name and stays for every existing caller; `items` is the
+  // same list under a name that does not lie when the resource is routines.
   return {
-    workouts: Array.isArray(body) ? body : workouts,
+    workouts: list,
+    items: list,
     pageCount: numOr(pick(body, ['page_count', 'pageCount', 'total_pages']), 0, 1e6) ?? 1,
   }
 }
@@ -122,6 +128,32 @@ export async function fetchWorkouts(key, { pageSize = PAGE_SIZE, maxPages = MAX_
     page++
   }
   return { workouts: all, truncated: pageCount > maxPages }
+}
+
+/**
+ * Every routine the key can see.
+ *
+ * This is the part the derivation in `derive-routines.js` can only approximate. That reads
+ * plans back out of what was trained, so it needs a title trained at least three times and
+ * refuses anything it cannot see a pattern in. Hevy has the actual routines — including the
+ * one written last night and never trained, which no amount of history will reveal.
+ *
+ * Failure here is deliberately **not** fatal to a sync: the workouts are the training log and
+ * the routines are the plan on top of it, so a routines endpoint that 404s or changes shape
+ * costs the plan, not the history. `syncHevy` catches it.
+ */
+export async function fetchRoutines(key, { pageSize = PAGE_SIZE, maxPages = MAX_PAGES, base = HEVY_BASE, fetchFn, onProgress } = {}) {
+  const all = []
+  let page = 1, pageCount = 1
+  while (page <= pageCount && page <= maxPages) {
+    const r = await fetchPage(key, page, { pageSize, base, fetchFn, resource: 'routines' })
+    all.push(...r.items)
+    pageCount = r.pageCount || 1
+    onProgress && onProgress({ page, pageCount, count: all.length })
+    if (!r.items.length) break
+    page++
+  }
+  return { routines: all, truncated: pageCount > maxPages }
 }
 
 /* --------------------------------------------------------------- to CSV --- */
@@ -256,7 +288,22 @@ export function workoutsToCsv(raw) {
 export async function syncHevy(key, opts = {}) {
   const { workouts, truncated } = await fetchWorkouts(key, opts)
   if (!workouts.length) throw new HevyError('empty', 'That Hevy account has no workouts yet')
-  return { ...workoutsToCsv(workouts), truncated }
+
+  // Routines are the plan sitting on top of the log, and the log is what a sync is for. By
+  // this point the key has already worked, so a failure here is the routines endpoint itself
+  // — a 404, a shape change — and losing the plan is not worth losing the history over. The
+  // reason is kept rather than dropped: the confirm sheet says the routines could not be
+  // read, so a silently plan-less sync cannot be mistaken for an account with no routines.
+  let routines = [], routinesError = null
+  if (opts.routines !== false) {
+    try {
+      routines = (await fetchRoutines(key, opts)).routines
+    } catch (e) {
+      routines = []
+      routinesError = e instanceof HevyError ? e.code : 'http'
+    }
+  }
+  return { ...workoutsToCsv(workouts), routines, routinesError, truncated }
 }
 
 /** What to put in front of the user for each failure. English source strings are the keys. */

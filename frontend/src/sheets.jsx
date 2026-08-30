@@ -26,6 +26,8 @@ import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLIC
 import { MOBILE, shareExport } from './lib/mobile.js'
 import { chronoAge } from './lib/fitness-age.js'
 import { syncHevy, HEVY_MESSAGE, COVERAGE_FLOOR } from './lib/hevy-api.js'
+import { mapRoutines, applyRealRoutines } from './lib/hevy-routines.js'
+import { normName as normRoutineName } from './lib/derive-routines.js'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -246,7 +248,18 @@ function ImportSummary({ parsed, close }) {
   // Routines rebuilt out of the sessions (derive-routines.js). This is an inference, so it
   // gets the same treatment as a unit conversion: shown, named and refusable, on the last
   // screen before anything is written.
+  //
+  // A Hevy API sync overlays the real routines on top (hevy-routines.js), and those are not
+  // an inference at all. The two are told apart here rather than blurred: a user deciding
+  // whether to accept a routine should know whether the app read it or guessed it.
   const routines = parsed.routines || []
+  const realCount = routines.filter(r => r.real).length
+  // A routine whose name is already in the plan is not overwritten by an import — mergeImport
+  // hands it the sessions and keeps what is there, because the local one may have been edited
+  // here. That is the right default, but it has to be *said*: listing a Hevy routine on this
+  // sheet and then quietly keeping a different one under that name is the kind of gap between
+  // the summary and the write that this sheet exists to close.
+  const taken = new Set((st.routines || []).map(r => normRoutineName(r.name)))
   const unnamed = (parsed.skippedRoutines || []).filter(r => r.why === 'generic')
     .reduce((a, r) => a + r.sessions, 0)
   const refused = (parsed.skippedRoutines || []).filter(r => r.why !== 'generic')
@@ -335,18 +348,28 @@ function ImportSummary({ parsed, close }) {
       parsed.rirSets || parsed.rpeSets, parsed.rirSets ? 'RIR' : 'RPE')}
     </div>}
     {routines.length > 0 && <>
-      <h4 className="sec">{t('Routines rebuilt from these sessions')}</h4>
+      <h4 className="sec">{realCount === routines.length ? t('Your Hevy routines')
+        : realCount ? t('Your routines') : t('Routines rebuilt from these sessions')}</h4>
       <div className="list" style={{ marginBottom: 8 }}>
         {routines.map(r => <div key={r.id} className="item">
           <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
           <div className="grow">
             <div className="tt">{r.name}</div>
-            <div className="ss">{exCount(r.ex.length)} · {t('from {0} sessions', r.sessions)}</div>
+            <div className="ss">{exCount(r.ex.length)} · {
+              r.real && taken.has(normRoutineName(r.name)) ? t('already in your plan — yours is kept')
+                : r.real
+                  ? (r.sessions ? t('from Hevy · {0} sessions', r.sessions) : t('from Hevy · not trained yet'))
+                  : t('rebuilt from {0} sessions', r.sessions)
+            }</div>
           </div>
         </div>)}
       </div>
       <div className="small dim" style={{ marginBottom: 10 }}>
-        {t('Your history records what you trained, never what you planned. These are the plans behind it — you can edit or delete any of them afterwards.')}
+        {realCount === routines.length
+          ? t('These came straight from your Hevy account, so they are the routines themselves rather than a guess at them. You can edit or delete any of them afterwards.')
+          : realCount
+            ? t('The ones marked from Hevy came straight from your account. The rest were rebuilt from your history, which records what you trained but never what you planned. You can edit or delete any of them afterwards.')
+            : t('Your history records what you trained, never what you planned. These are the plans behind it — you can edit or delete any of them afterwards.')}
       </div>
     </>}
     {!isBW && !isMetrics && unnamed > 0 && <div className="small dim" style={{ marginBottom: 10 }}>
@@ -509,8 +532,12 @@ function HevySheet({ close }) {
     setBusy(true); setErr(null); setNote(null)
     try {
       const r = await syncHevy(key, { onProgress: p => setNote(t('{0} workouts so far…', p.count)) })
-      const parsed = parseImport(r.csv, { unit: S().unit })
+      let parsed = parseImport(r.csv, { unit: S().unit })
       if (parsed.error || importIsEmpty(parsed)) { setErr(t(HEVY_MESSAGE.shape)); setBusy(false); return }
+      // The file path had to reconstruct routines from the history; the API hands over the
+      // real ones. Overlay them, keeping the derived id wherever the names agree so the
+      // sessions the derivation linked stay linked. See lib/hevy-routines.js.
+      if (r.routines && r.routines.length) parsed = applyRealRoutines(parsed, mapRoutines(r.routines))
       // Most sets carried a number: nothing to query, straight to the normal confirm sheet.
       // A low share means the mapper read Hevy's envelope but not its sets, which imports a
       // history of empty ones — quiet enough that nobody would catch it on the summary alone.
