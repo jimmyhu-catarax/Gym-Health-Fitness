@@ -11,7 +11,7 @@ import { starterRoutines } from './lib/starter.js'
 import Media, { Thumb } from './components/Media.jsx'
 import Stepper from './components/Stepper.jsx'
 import Icon from './components/Icon.jsx'
-import { Button, Slider, Switch, Segmented, SelectRow, Row, NumberField } from './components/ui.jsx'
+import { Button, Slider, Switch, Segmented, SelectRow, Row, NumberField, TextField } from './components/ui.jsx'
 import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
 import BodyMap from './components/BodyMap.jsx'
 import { loadOfWorkouts } from './lib/muscles.js'
@@ -25,6 +25,7 @@ import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
 import { MOBILE, shareExport } from './lib/mobile.js'
 import { chronoAge } from './lib/fitness-age.js'
+import { syncHevy, HEVY_MESSAGE } from './lib/hevy-api.js'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -475,6 +476,65 @@ export async function importFromApp(file, onDone) {
   ui().openSheet(close => <ImportSummary parsed={parsed} close={close} />)
   onDone && onDone()
 }
+
+/* ============================ Hevy sync ============================ */
+// The same import, without the export-a-file step.
+//
+// Everything below the fetch is the file path unchanged: lib/hevy-api.js turns the response
+// into the CSV Hevy itself exports, parseImport reads it exactly as it reads a dropped file,
+// and ImportSummary still stands between the result and anything being written. Nothing about
+// dedup, exercise matching or routine rebuilding is special-cased for having come over the
+// network — a synced workout and an exported one are the same workout.
+//
+// The key is saved only after a sync has succeeded with it. A key that Hevy just rejected is
+// not worth persisting, and silently keeping one makes the next failure harder to read.
+function HevySheet({ close }) {
+  const st = useStore(s => s.S)
+  const [key, setKey] = useState(st.hevyKey || '')
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState(null)
+  const [err, setErr] = useState(null)
+
+  const run = async () => {
+    setBusy(true); setErr(null); setNote(null)
+    try {
+      const r = await syncHevy(key, { onProgress: p => setNote(t('{0} workouts so far…', p.count)) })
+      const parsed = parseImport(r.csv, { unit: S().unit })
+      if (parsed.error || importIsEmpty(parsed)) { setErr(t(HEVY_MESSAGE.shape)); setBusy(false); return }
+      update(s => { s.hevyKey = key.trim() })
+      close()
+      // Say so rather than quietly importing a prefix of somebody's history.
+      if (r.truncated) toast(t('Fetched the most recent {0} workouts — sync again for the rest', r.workouts))
+      ui().openSheet(c2 => <ImportSummary parsed={parsed} close={c2} />)
+    } catch (e) {
+      setErr(t(HEVY_MESSAGE[e && e.code] || HEVY_MESSAGE.http))
+      setBusy(false)
+    }
+  }
+
+  return <>
+    <h3>{t('Sync from Hevy')}</h3>
+    <div className="muted small" style={{ lineHeight: 1.5, marginBottom: 12 }}>
+      {t('Pulls your workouts straight from Hevy — no export needed. Your key comes from hevy.com/settings?developer, which needs Hevy Pro; without it, the CSV export still imports.')}
+    </div>
+    <TextField value={key} onChange={e => setKey(e.target.value)} type="password"
+      autoComplete="off" spellCheck="false" placeholder={t('Hevy API key')} aria-label={t('Hevy API key')} />
+    {note && <div className="dim small" style={{ marginTop: 8 }}>{note}</div>}
+    {err && <div className="small" style={{ marginTop: 8, lineHeight: 1.45, color: 'var(--red-ink)' }}>{err}</div>}
+    <div style={{ height: 14 }} />
+    <Button variant="primary" icon="download" disabled={busy || !key.trim()} onClick={run}>
+      {busy ? t('Syncing…') : t('Sync now')}
+    </Button>
+    {st.hevyKey && <><div style={{ height: 8 }} />
+      <Button variant="danger" disabled={busy} onClick={() => { update(s => { s.hevyKey = null }); setKey(''); toast(t('Hevy key forgotten')) }}>
+        {t('Forget key')}
+      </Button></>}
+    <div className="dim small" style={{ marginTop: 12, lineHeight: 1.5 }}>
+      {t('Nothing is written until you confirm it on the next screen, and re-syncing never duplicates a day you already have.')}
+    </div>
+  </>
+}
+export const hevySheet = () => ui().openSheet(close => <HevySheet close={close} />)
 
 /* ============================ target weight ============================ */
 export function bwDeltaColor(delta, currentW) {

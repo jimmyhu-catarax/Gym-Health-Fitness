@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { decodeText, importIsEmpty } from './import-file.js'
+import { decodeText, importIsEmpty, redactCredentials, CREDENTIAL_KEYS } from './import-file.js'
 
 const utf8 = s => new TextEncoder().encode(s)
 const withBom = (bom, bytes) => {
@@ -100,5 +100,31 @@ describe('importIsEmpty', () => {
 
   it('treats nothing at all as empty', () => {
     for (const v of [null, undefined, 'nope', 42]) expect(importIsEmpty(v)).toBe(true)
+  })
+})
+
+describe('redactCredentials', () => {
+  it('blanks the Hevy key so a shared backup does not carry one', () => {
+    const S = { unit: 'kg', hevyKey: 'live-key', workouts: [{ d: '2026-08-01' }] }
+    const out = redactCredentials(S)
+    expect(out.hevyKey).toBeNull()
+    expect(out.workouts).toBe(S.workouts)   // everything else passes through untouched
+    expect(out.unit).toBe('kg')
+  })
+
+  it('does not mutate the live state it was handed', () => {
+    const S = { hevyKey: 'live-key' }
+    redactCredentials(S)
+    expect(S.hevyKey).toBe('live-key')
+  })
+
+  it('leaves a state that never had one alone', () => {
+    expect(redactCredentials({ unit: 'kg' })).toEqual({ unit: 'kg' })
+    expect(redactCredentials(null)).toBeNull()
+  })
+
+  it('covers every key it claims to', () => {
+    const S = Object.fromEntries(CREDENTIAL_KEYS.map(k => [k, 'secret']))
+    expect(Object.values(redactCredentials(S)).every(v => v === null)).toBe(true)
   })
 })

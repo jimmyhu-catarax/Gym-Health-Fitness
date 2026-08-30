@@ -16,6 +16,11 @@ export const DEF = {
   // server pull, backup import) still falls back to the `showRir` boolean this replaced and
   // keeps the column it had. See effortOf.
   reminder: { on: false, time: '08:00', tz: null }, effort: null,
+  // The user's own Hevy API key (hevy.com/settings?developer, Hevy Pro only). Held with the
+  // rest of the profile because that is where the profile lives — on this device, and on this
+  // instance's disk for a signed-in user. It is a credential, so it is written only after a
+  // sync has actually succeeded with it, and "Forget key" clears it. See lib/hevy-api.js.
+  hevyKey: null,
   // Fitness age inputs (lib/fitness-age.js). All null until the profile opts in — the card
   // stays hidden rather than showing a number built on defaults.
   //

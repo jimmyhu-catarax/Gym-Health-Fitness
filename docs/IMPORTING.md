@@ -59,6 +59,46 @@ a Whoop workout can only become a **cardio session** here: its duration, and a s
 the row carried a distance. Strain, calories and heart rate are not imported — there is
 nowhere in the app to show them. Whoop has no scale, so it brings no body weight either.
 
+## Syncing from Hevy directly
+
+Settings → **Sync from Hevy** pulls your workouts over Hevy's API instead of asking you to
+export a file. It needs an API key from
+[hevy.com/settings?developer](https://hevy.com/settings?developer), which is a **Hevy Pro**
+feature — a free account cannot create one, and the CSV export above still works for everyone.
+
+The sync is deliberately a thin layer on the file path rather than a second way in.
+`lib/hevy-api.js` turns the API response into the exact CSV Hevy itself exports and hands it to
+the same reader, so it inherits every guard already written for the file: exercise matching,
+custom exercises for the unmatched, unit handling, warm-up marking, routine rebuilding, and the
+confirm sheet that stands between the result and anything being written. A synced workout and
+an exported one are the same workout.
+
+Things worth knowing:
+
+- **Nothing is written until you confirm it**, exactly as with a file, and day-level dedup means
+  syncing twice never duplicates a day.
+- **The key is saved only after a sync succeeds with it.** One Hevy has just rejected is not
+  worth keeping, and silently holding it makes the next failure harder to read. *Forget key*
+  clears it.
+- **Your browser calls Hevy directly.** Hevy sends `access-control-allow-origin: *` and allows
+  the `api-key` header, so nothing proxies through this app's Node service — it stays the
+  passkey-and-push service the README describes, and your key never reaches it.
+- **Every sync refetches your whole history**, up to 4000 workouts. Hevy documents an events
+  endpoint for incremental sync, but its response shape is not verified here, and a guessed
+  cursor that silently skips a fortnight is a worse bug than a slow sync.
+- **The response is read defensively.** Each field is looked up under its documented name and a
+  couple of plausible spellings, then sanity-checked against its value; a response where no
+  workout resolves both a time and a named exercise is refused rather than turned into an empty
+  or a wrong import.
+
+### Not verified against a live account
+
+The endpoint, the `api-key` header and the CORS headers were checked against the real API. The
+response *body* was not — that needs a Pro key. The mapper is written to refuse what it does
+not recognise rather than guess, and the confirm sheet shows you the dates and counts before
+anything is written, so a shape mismatch should surface as a refusal or an obviously wrong
+summary rather than a silently wrong log. Check the first sync's summary before confirming it.
+
 ## Body weight
 
 | Source | What to export | Notes |
