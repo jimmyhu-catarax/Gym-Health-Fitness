@@ -1,14 +1,94 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
+import { morningBrief } from '../lib/brief.js'
+import { ZONE_INK, ZONE_NAME, fmtDuration } from '../lib/metrics.js'
 import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 import { glyphOf } from '../lib/glyphs.js'
+
+// The band's half of the morning, on the screen you actually open.
+//
+// Three numbers and one sentence, above the session they bear on — deliberately the smallest
+// thing that makes this one app instead of two sharing a tab bar. Depth lives in Stats; this
+// is the glance, and it links there.
+//
+// It renders nothing at all when there has never been an import. A lifter without a band
+// should not be given an empty card explaining what they are missing, and Stats already
+// carries the invitation for anyone who wants it.
+function MorningStrip({ S, nav }) {
+  const b = useMemo(() => morningBrief(S), [S.metrics])
+  if (!b.has) return null
+
+  // There is data, it has just gone stale. Saying "no data" here would tell someone who
+  // imported last month that the feature does not exist; the fix is a sync, so say that.
+  if (!b.any) return (
+    <div className="card tappable" style={{ cursor: 'pointer' }} onClick={() => nav('/stats')}>
+      <div className="row between">
+        <div className="row" style={{ gap: 9, minWidth: 0 }}>
+          <span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="heart" /></span>
+          <div style={{ minWidth: 0 }}>
+            <div className="lbl2">{t('Recovery')}</div>
+            <div className="ttl">{t(b.stale === 1 ? 'Band data is {0} day old' : 'Band data is {0} days old', b.stale)}</div>
+          </div>
+        </div>
+        <Icon name="chevronRight" className="chev" />
+      </div>
+    </div>
+  )
+
+  const { recovery, sleep, strain } = b
+  // "Yesterday" rather than a date: a completed strain day normally is yesterday, and the
+  // reader needs to know which day the number is about, not when the file was written.
+  // Sublines stay short enough to hold one line on a 320px screen — a four-line subline
+  // pushed the whole strip past the session it is meant to sit above.
+  const when = m => (m && m.stale > 0 ? ' · ' + t('yesterday') : '')
+
+  return <div className="card tappable" style={{ cursor: 'pointer' }} onClick={() => nav('/stats')}>
+    <div className="row between" style={{ marginBottom: 10 }}>
+      <h2 style={{ margin: 0 }}>{t('This morning')}</h2>
+      <Icon name="chevronRight" className="chev" />
+    </div>
+    <div className="tiles three" style={{ marginBottom: recovery ? 10 : 0 }}>
+      <div className="tile">
+        <div className="l"><Icon name="heart" className="icn" />{t('Recovery')}</div>
+        <div className="v" style={{ color: recovery ? ZONE_INK[recovery.zone] : undefined }}>
+          {recovery ? <>{recovery.pct}<span style={{ fontSize: 17 }}>%</span></> : '—'}
+        </div>
+        <div className="dim small" style={{ marginTop: 3 }}>
+          {recovery ? t(ZONE_NAME[recovery.zone]) + when(recovery) : t('not scored')}
+        </div>
+      </div>
+      <div className="tile">
+        <div className="l"><Icon name="moon" className="icn" />{t('Slept')}</div>
+        <div className="v">{sleep && sleep.dur != null ? fmtDuration(sleep.dur) : '—'}</div>
+        <div className="dim small" style={{ marginTop: 3 }}>
+          {sleep == null ? t('not recorded')
+            : sleep.perf != null ? t('{0}% of need', Math.round(sleep.perf))
+            : sleep.short ? t('{0} short', fmtDuration(sleep.short))
+            : t('logged')}
+        </div>
+      </div>
+      <div className="tile">
+        <div className="l"><Icon name="bolt" className="icn" />{t('Strain')}</div>
+        <div className="v">{strain ? strain.value.toFixed(1) : '—'}</div>
+        <div className="dim small" style={{ marginTop: 3 }}>
+          {strain ? (strain.stale > 0 ? t('yesterday') : t('today')) : t('not recorded')}
+        </div>
+      </div>
+    </div>
+    {/* Reports, never prescribes — see brief.js. This says where you are, not what to lift. */}
+    {recovery && <div className="muted small" style={{ lineHeight: 1.45 }}>
+      {t(recovery.note)}
+      {recovery.src === 'computed' && <> {t('(worked out from your HRV and resting heart rate — the band did not score this day)')}</>}
+    </div>}
+  </div>
+}
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
@@ -50,6 +130,8 @@ export default function Home() {
       <div><h1>{user ? t('Hi {0}', user.name) : 'openGym'}</h1><div className="sub">{today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</div></div>
       <button className="iconbtn" onClick={() => nav('/settings')} aria-label={t('Settings')}><Icon name="gear" /></button>
     </div>
+
+    <MorningStrip S={S} nav={nav} />
 
     <div className="card">
       <div className="row between" style={{ marginBottom: 8 }}>

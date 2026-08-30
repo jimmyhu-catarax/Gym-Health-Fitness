@@ -19,7 +19,9 @@
 // building a DOM.
 
 import { EXDB, EXIDX } from './exercises.js'
+import { mergeNote, countNotes } from './notes.js'
 import { uid } from './format.js'
+import { deriveRoutines, normName as normRoutineName } from './derive-routines.js'
 
 /* ----------------------------------------------------------------- CSV ---- */
 
@@ -76,7 +78,12 @@ const COLUMNS = [
   ['seconds', ['seconds', 'duration seconds']],
   ['time', ['time', 'duration']],
   ['setType', ['set type']],
-  ['note', ['comment', 'comments', 'notes', 'note']],
+  // Notes at both levels the exporters actually write. Hevy: `description` per session and
+  // `exercise_notes` per exercise. Strong: `Workout Notes` and `Notes`. FitNotes: `Comment`.
+  // These columns used to be mapped and then never read, so every note in an imported
+  // history was silently dropped — see lib/notes.js for why that is worth a module.
+  ['workoutNote', ['description', 'workout notes']],
+  ['exerciseNote', ['exercise notes', 'comment', 'comments', 'notes', 'note']],
 ]
 
 function mapHeader(header) {
@@ -334,7 +341,8 @@ export function parseWorkoutCSV(text, { unit = 'kg' } = {}) {
       ? num(cell(r, 'distanceKm'))
       : toKm(cell(r, 'distance'), cell(r, 'distanceUnit'))
     if (!w && !reps && !mins && !km) { skipped++; continue }
-    if (/warm/i.test(cell(r, 'setType'))) warmups++
+    const isWarmup = /warm/i.test(cell(r, 'setType'))
+    if (isWarmup) warmups++
 
     const key = keyOf(name)
     let id = resolved.get(key)
@@ -359,6 +367,9 @@ export function parseWorkoutCSV(text, { unit = 'kg' } = {}) {
     const set = isCardio
       ? { min: mins || 0, speed: mins > 0 ? Math.round(km / (mins / 60) * 10) / 10 : 0, done: true }
       : { w, r: reps || 0, done: true, u: rowUnit }
+    // Keep the file's own warm-up flag. It used to be counted and thrown away; derive-routines.js
+    // needs it to say "4 sets of bench" rather than counting the two ramp-up sets with them.
+    if (isWarmup) set.wu = 1
     // Effort rides along only where the app can show it again: a weighted rep set. A treadmill
     // row with an RPE would have nowhere to put it. A set is kept on one scale, so a file
     // carrying both columns is read as RIR — the same precedence setLabel reads them back with.
@@ -371,12 +382,18 @@ export function parseWorkoutCSV(text, { unit = 'kg' } = {}) {
 
     let day = byDate.get(when.d)
     if (!day) {
-      day = { ex: new Map(), name: cell(r, 'workoutName') || '', start: when.t, end: null }
+      day = { ex: new Map(), exNote: new Map(), note: null, name: cell(r, 'workoutName') || '', start: when.t, end: null }
       byDate.set(when.d, day)
     }
     if (!day.name) day.name = cell(r, 'workoutName') || ''
     if (map.endTime !== undefined) { const e = parseWhen(cell(r, 'endTime')); if (e && e.t != null) day.end = e.t }
     else if (map.time !== undefined && !map.seconds && reps) { /* FitNotes' Time is per-set */ }
+    // Both exporters repeat their notes on every row of the thing the note belongs to —
+    // the session description on all of it, an exercise's notes on each of its set rows —
+    // so mergeNote() collapses the repeats and keeps only genuinely different text.
+    day.note = mergeNote(day.note, cell(r, 'workoutNote'))
+    const exNote = mergeNote(day.exNote.get(id), cell(r, 'exerciseNote'))
+    if (exNote) day.exNote.set(id, exNote)
     if (!day.ex.has(id)) day.ex.set(id, [])
     day.ex.get(id).push(set)
     sets++
@@ -406,7 +423,8 @@ export function parseWorkoutCSV(text, { unit = 'kg' } = {}) {
     const entries = [...day.ex.entries()].map(([id, ss]) => {
       const conv2 = ss.map(({ u, ...s }) => (s.w !== undefined ? { ...s, w: convRow({ ...s, u }) } : s))
       const mx = Math.max(0, ...conv2.map(s => s.w || 0))
-      return { id, sets: conv2, topW: mx || null }
+      const note = day.exNote.get(id) || null
+      return note ? { id, sets: conv2, topW: mx || null, note } : { id, sets: conv2, topW: mx || null }
     })
     const base = new Date(d + 'T00:00:00').getTime()
     const start = base + (day.start ?? 18 * 3600000)
@@ -415,18 +433,30 @@ export function parseWorkoutCSV(text, { unit = 'kg' } = {}) {
       id: 'iw' + uid(), d, start, end: end > start ? end : start,
       routineId: null, name: day.name || 'Imported', entries, prs: [],
     }
+    // Only when there is one: an absent note and an empty one have to be the same thing
+    // in state, or history renders a bubble for something nobody wrote.
+    if (day.note) w.note = day.note
     w.vol = entries.reduce((a, e) => a + e.sets.reduce((b, s) => b + (s.w || 0) * (s.r || 0), 0), 0)
     return w
   })
 
+  // The file says what was trained, never what was planned. Read the plans back out of it,
+  // and hang each session on the routine it came from — a history without routines lands in
+  // an app whose progression engine has nothing to prescribe from. Nothing is stored yet:
+  // the summary sheet shows what was rebuilt (and what was refused) before any of it lands.
+  const derived = deriveRoutines(workouts)
+  workouts.forEach(w => { if (derived.links[w.id]) w.routineId = derived.links[w.id] })
+
   return {
     kind: 'workouts', source, workouts, customEx: [...created.values()],
+    routines: derived.routines, skippedRoutines: derived.skipped,
     // distinct library exercises behind the matched rows — the summary calls this
     // "exercises matched", and counting rows there made three exercises read as five
     matched: new Set([...resolved.values()].filter(Boolean)).size,
     matchedSets: matched,
     created: created.size, unmatchedNames: [...unmatched].sort(),
     sets, skipped, warmups, fileUnit, mixedUnits, converted, rpeSets, rirSets,
+    notes: countNotes(workouts),
     from: dates[0] || null, to: dates[dates.length - 1] || null,
   }
 }
@@ -516,11 +546,38 @@ export function mergeImport(S, parsed) {
   const used = new Set(fresh.flatMap(w => w.entries.map(e => e.id)))
   const customs = parsed.customEx.filter(c => used.has(c.id) && !EXIDX[c.id])
   S.customEx = [...(S.customEx || []), ...customs]
+
+  // Routines rebuilt from the file (derive-routines.js). Two things keep a re-import from
+  // growing a second copy of somebody's plan: a routine whose every session is already
+  // here is not added at all, and one whose name is already taken hands its sessions to
+  // the routine that owns the name instead of shadowing it.
+  const byName = new Map((S.routines || []).map(r => [normRoutineName(r.name), r.id]))
+  const wanted = new Set(fresh.map(w => w.routineId).filter(Boolean))
+  const newRoutines = []
+  for (const r of parsed.routines || []) {
+    // The "no new sessions, no routine" rule is about *derived* routines: those are read
+    // back out of the sessions, so one with nothing fresh behind it is a plan already here.
+    // A real routine (hevy-routines.js) is not derived from these sessions at all — it is
+    // the plan the other app holds, and the one most worth having, written last night and
+    // never trained, has no sessions by definition. It is added on its own merit; the name
+    // check below still stops it duplicating something already in the plan.
+    if (!r.real && !wanted.has(r.id)) continue
+    const existing = byName.get(normRoutineName(r.name))
+    if (existing) { fresh.forEach(w => { if (w.routineId === r.id) w.routineId = existing }); continue }
+    // `sessions` and `real` are evidence for the summary sheet, not state worth syncing.
+    const { sessions, real, ...routine } = r
+    newRoutines.push(routine)
+    byName.set(normRoutineName(r.name), r.id)
+  }
+  S.routines = [...(S.routines || []), ...newRoutines]
   S.workouts = [...S.workouts, ...fresh].sort((a, b) => (a.d < b.d ? -1 : 1))
   // seed the weight suggestions from the newest imported set of each lift
   fresh.forEach(w => w.entries.forEach(e => {
     const mx = Math.max(0, ...e.sets.map(s => s.w || 0), e.topW || 0)
     if (mx > 0) { const cur = S.exWeights[e.id]; if (!cur || w.d >= cur.d) S.exWeights[e.id] = { w: mx, d: w.d } }
   }))
-  return { added: fresh.length, skipped: parsed.workouts.length - fresh.length }
+  return {
+    added: fresh.length, skipped: parsed.workouts.length - fresh.length,
+    routines: newRoutines.length,
+  }
 }

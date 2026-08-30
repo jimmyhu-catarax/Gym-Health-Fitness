@@ -482,13 +482,14 @@ const LOAD_INK = { easing: 'var(--blue-ink)', steady: 'var(--green-ink)', rampin
 
 function SleepLoadCard({ S }) {
   const [range, setRange] = useState(30)
-  const d = useMemo(() => trendDetail(S, { days: range }), [S.metrics, range])
+  const d = useMemo(() => trendDetail(S, { days: range }), [S.metrics, S.workouts, range])
   if (!d.ok) return null
 
-  const { mix, shortfall, load, weekly } = d
+  const { mix, shortfall, load, weekly, lifting } = d
   const peak = Math.max(1, ...weekly.map(w => w.total))
-  // Only one of the two halves may have data; with neither there is nothing to show.
-  if (!mix.ok && !load.ok && !weekly.length) return null
+  const liftPeak = lifting.ok ? Math.max(1, ...lifting.weekly.map(w => w.total)) : 1
+  // Any one of the three may be the only half with data; with none there is nothing to show.
+  if (!mix.ok && !load.ok && !weekly.length && !lifting.ok) return null
 
   return <div className="card">
     <div className="row between">
@@ -549,6 +550,49 @@ function SleepLoadCard({ S }) {
       <div className="muted small" style={{ marginTop: 6, lineHeight: 1.45 }}>
         {t('Your average daily strain over the last week against the last four weeks. It describes whether you are ramping or easing — it is not a measure of injury risk, and nothing here can tell you whether to train.')}
       </div>
+    </>}
+
+    {lifting.ok && <>
+      <h4 className="sec">{t('Lifting load')}</h4>
+      {lifting.balance.ok && <div className="row" style={{ gap: 18, alignItems: 'baseline' }}>
+        <div style={{ fontSize: 30, fontWeight: 700, lineHeight: 1, color: LOAD_INK[lifting.balance.band.key] }}>
+          {lifting.balance.ratio.toFixed(2)}<span style={{ fontSize: 15 }}>×</span>
+        </div>
+        <div className="muted small" style={{ lineHeight: 1.45 }}>
+          <span style={{ color: LOAD_INK[lifting.balance.band.key] }}>{t(lifting.balance.band.label)}</span><br />
+          {t('this week {0} vs your month {1}',
+            lifting.basis === 'volume' ? fmtVol(lifting.balance.acute, S.unit) : lifting.balance.acute,
+            lifting.basis === 'volume' ? fmtVol(lifting.balance.chronic, S.unit) : lifting.balance.chronic)}
+        </div>
+      </div>}
+      {/* Which basis, said plainly. "Load 1.4×" reads very differently depending on the
+          answer, and the weaker basis is only in use because the stronger one is unavailable
+          — so say what would buy it. */}
+      <div className="muted small" style={{ marginTop: 6, lineHeight: 1.45 }}>
+        {lifting.basis === 'srpe'
+          ? t('Session effort × duration, averaged over the calendar with rest days counted as the zeroes they are — {0} of your last {1} sessions carry a rating. Arbitrary units: comparable with your own other weeks and with nothing else.', lifting.rated, lifting.sessions)
+          : t('Weight × reps, averaged over the calendar with rest days counted in. Every profile has this one, but it scores a bodyweight session at zero — switch on Effort per set in Settings and it becomes effort × duration instead, which counts the session you actually did.')}
+      </div>
+      {/* The one thing that must not happen to these two numbers. */}
+      {load.ok && <div className="muted small" style={{ marginTop: 6, lineHeight: 1.45 }}>
+        {t('Kept separate from strain above rather than added to it — a lifting session and a Whoop strain are not the same unit, and a combined number would mean whatever the week happened to hold.')}
+      </div>}
+      {lifting.weekly.length > 1 && <div className="row" style={{ gap: 6, alignItems: 'flex-end', height: 70, marginTop: 10 }}>
+        {lifting.weekly.map(w => <div key={w.week} style={{ flex: 1, textAlign: 'center' }}>
+          <div title={`${w.total} over ${w.days} sessions`} style={{
+            height: Math.max(3, (w.total / liftPeak) * 56), borderRadius: 3, background: 'var(--teal)',
+          }} />
+          {/* The sessions, not the load: the bar already carries the load, and the number
+              under it answers what the bar cannot — whether a light week was easier
+              training or simply less of it. No hollow bars here; unlike the strain series
+              a short lifting week is usually a real one, and drawing it as incomplete
+              would say something untrue about a deload. */}
+          <div className="muted" style={{ fontSize: 10, marginTop: 4 }}>{w.days}</div>
+        </div>)}
+      </div>}
+      {lifting.weekly.length > 1 && <div className="muted small" style={{ marginTop: 4 }}>
+        {t('Load by week, labelled with the number of sessions in it. The first and last weeks may be part-weeks — one cut off by the start of the range, the other still running.')}
+      </div>}
     </>}
 
     {weekly.length > 1 && <>

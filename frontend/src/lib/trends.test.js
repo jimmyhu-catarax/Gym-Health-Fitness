@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import {
-  stageMix, sleepShortfall, loadBalance, weeklyStrain, trendDetail,
+  stageMix, sleepShortfall, loadBalance, weeklyStrain, trendDetail, liftingLoad,
   loadBand, LOAD_BANDS, STAGES, MIX_MIN_NIGHTS, ACUTE_DAYS, CHRONIC_DAYS,
 } from './trends.js'
 
 const DAY = 86400000
 const NOW = Date.parse('2026-08-25T12:00:00Z')
 const iso = n => new Date(NOW - n * DAY).toISOString().slice(0, 10)
+const dayMsOf = d => Date.parse(d + 'T12:00:00Z')
 
 /** n days ending today, newest last. */
 const days = (n, f) => Array.from({ length: n }, (_, i) => ({ d: iso(n - 1 - i), ...f(i, n) }))
@@ -142,9 +143,59 @@ describe('loadBalance', () => {
     }
   })
 
+  it('counts exactly as many days as the window names', () => {
+    // Not n + 1. Once `fill` divides by the window length, an extra day's load in the
+    // numerator reads as a heavier week than the week was.
+    const r = loadBalance(days(30, () => ({ strain: 10 })), { now: NOW })
+    expect(r.acuteDays).toBe(ACUTE_DAYS)
+    expect(r.days).toBe(CHRONIC_DAYS)
+  })
+
   it('survives junk', () => {
     expect(loadBalance(null)).toBeNull()
     expect(loadBalance([], { now: NOW }).ok).toBe(false)
+  })
+})
+
+describe('loadBalance with rest days filled', () => {
+  // A band records every day, so a gap is missing data. Lifting is intermittent by design,
+  // so a gap is a rest day — a real zero, and part of the load picture rather than absent
+  // from it.
+  const sessions = (n, everyNth, load) =>
+    Array.from({ length: n }, (_, i) => (i % everyNth === 0 ? { d: iso(i), load } : null)).filter(Boolean)
+  const bal = rows => loadBalance(rows, { now: NOW, value: m => m.load, fill: true })
+
+  it('accepts a three-day-a-week lifter, who has no coverage to speak of', () => {
+    // Twelve training days in a 28-day window. The unfilled guard wants seventeen, so this
+    // is exactly the history the strain rules would have thrown out.
+    const rows = sessions(60, 2, 400)
+    expect(loadBalance(rows, { now: NOW, value: m => m.load }).ok).toBe(false)
+    expect(bal(rows).ok).toBe(true)
+  })
+
+  it('tells a heavier week from a lighter one by how often you trained, not just how hard', () => {
+    // Same session load, twice the sessions. Averaging over training days alone would call
+    // these two weeks identical.
+    const often = [...sessions(60, 1, 400)]
+    const rarely = [...sessions(60, 3, 400)]
+    expect(bal(often).acute).toBeGreaterThan(bal(rarely).acute * 2)
+  })
+
+  it('reads a week off as easing off rather than as missing data', () => {
+    const rows = sessions(60, 2, 400).filter(m => dayMsOf(m.d) < NOW - 7 * DAY)
+    const r = bal(rows)
+    expect(r.ok).toBe(true)
+    expect(r.acute).toBe(0)
+    expect(r.band.key).toBe('easing')
+  })
+
+  it('still refuses a history that does not reach across the chronic window', () => {
+    expect(bal(sessions(20, 2, 400)).ok).toBe(false)
+    expect(bal([]).ok).toBe(false)
+  })
+
+  it('refuses rather than divide by a month of nothing', () => {
+    expect(bal(sessions(60, 2, 0)).ok).toBe(false)
   })
 })
 
@@ -171,6 +222,61 @@ describe('weeklyStrain', () => {
 
   it('skips days with no strain', () => {
     expect(weeklyStrain(days(14, () => ({ sleepDur: 400 })), { now: NOW })).toEqual([])
+  })
+})
+
+describe('liftingLoad', () => {
+  // A lifting session `back` days ago: `mins` long, ten sets of w x r, optionally rated.
+  const sess = (back, { mins = 60, rpe = null, w = 100, r = 5 } = {}) => {
+    const start = NOW - back * DAY
+    return {
+      id: 'w' + back, d: iso(back), start, end: start + mins * 60000,
+      entries: [{ id: 'bench', sets: Array.from({ length: 10 }, () => ({ w, r, done: true, ...(rpe ? { rpe } : {}) })) }],
+    }
+  }
+  const history = f => ({ workouts: Array.from({ length: 30 }, (_, i) => sess(i, f(i))) })
+
+  it('runs the load reads over the barbell half, on sRPE where the history is rated', () => {
+    const r = liftingLoad(history(() => ({ rpe: 8 })), { now: NOW })
+    expect(r.ok).toBe(true)
+    expect(r.basis).toBe('srpe')
+    expect(r.unit).toBe('AU')
+    expect(r.balance.ok).toBe(true)
+    // steady training: this week's average equals the month's
+    expect(r.balance.ratio).toBe(1)
+    expect(r.balance.acute).toBe(480)
+    expect(r.weekly.reduce((a, x) => a + x.days, 0)).toBe(30)
+  })
+
+  it('reads a ramp as a ramp, off the lifting series alone', () => {
+    // Last week is heavier than the month behind it. No Whoop data anywhere near this.
+    const r = liftingLoad(history(i => ({ rpe: i < 7 ? 9 : 6, mins: i < 7 ? 90 : 60 })), { now: NOW })
+    expect(r.balance.ratio).toBeGreaterThan(1.3)
+    expect(r.balance.band.key).toBe('ramping')
+  })
+
+  it('falls back to volume load and says so', () => {
+    const r = liftingLoad(history(() => ({})), { now: NOW })
+    expect(r.basis).toBe('volume')
+    expect(r.unit).toBe('volume')
+    expect(r.balance.acute).toBe(5000)
+    // ...and reports how close the profile came to the better basis
+    expect(r.rated).toBe(0)
+    expect(r.sessions).toBe(28)
+  })
+
+  it('refuses a history too thin to say anything', () => {
+    expect(liftingLoad({ workouts: [] }, { now: NOW }).ok).toBe(false)
+    expect(liftingLoad({}, { now: NOW }).ok).toBe(false)
+    expect(liftingLoad(null, { now: NOW }).ok).toBe(false)
+  })
+
+  it('never mixes a lifting load into the Whoop strain series', () => {
+    // The two are different units. Whoop strain is untouched by a month of barbell work.
+    const S = { workouts: history(() => ({ rpe: 8 })).workouts, metrics: days(30, () => ({ strain: 9 })) }
+    const d = trendDetail(S, { now: NOW })
+    expect(d.load.acute).toBe(9)
+    expect(d.lifting.balance.acute).toBe(480)
   })
 })
 
@@ -201,8 +307,8 @@ describe('trendDetail', () => {
     expect(r.shortfall).toBeNull()
   })
 
-  it('refuses when nothing is imported', () => {
-    expect(trendDetail({ metrics: [] }, { now: NOW })).toEqual({ ok: false, missing: ['metrics'] })
+  it('refuses only when neither half has anything', () => {
+    expect(trendDetail({ metrics: [] }, { now: NOW })).toEqual({ ok: false, missing: ['metrics', 'workouts'] })
     expect(trendDetail(null, { now: NOW }).ok).toBe(false)
   })
 

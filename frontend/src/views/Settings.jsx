@@ -10,7 +10,8 @@ import { wakeLockSupported } from '../lib/wakelock.js'
 import { t, LANGS, INSTR_LANGS } from '../lib/i18n.js'
 import { DEMO, REPO } from '../lib/demo.js'
 import { MOBILE, shareExport, syncReminder } from '../lib/mobile.js'
-import { loadStarterPlan, confirmSheet, importFromApp } from '../sheets.jsx'
+import { loadStarterPlan, confirmSheet, importFromApp, hevySheet } from '../sheets.jsx'
+import { redactCredentials } from '../lib/import-file.js'
 import Icon from '../components/Icon.jsx'
 import { Section, Row, SelectRow, Switch, Segmented, Button, TextField } from '../components/ui.jsx'
 
@@ -25,7 +26,8 @@ export default function Settings() {
   const wakeOK = wakeLockSupported()
 
   const doExport = async () => {
-    const json = JSON.stringify(S, null, 2)
+    // Credentials do not travel with a file the user will email to themselves. See import-file.js.
+    const json = JSON.stringify(redactCredentials(S), null, 2)
     const name = 'opengym-backup-' + todayISO() + '.json'
     // WKWebView can't download blob URLs — the native build hands the file to the share sheet.
     if (MOBILE) {
@@ -178,6 +180,9 @@ export default function Settings() {
       <Row icon="shuffle" iconTint="var(--teal)" title={t('Import from another app')}
         subtitle={t('FitNotes, Strong, Hevy, Whoop — or body weight from Apple Health, Google Fit and Health Connect')}
         accessory="chevron" onClick={() => importRef.current.click()} />
+      <Row icon="link" iconTint="var(--purple)" title={t('Sync from Hevy')}
+        subtitle={S.hevyKey ? t('Connected — pull your latest workouts') : t('Pull workouts straight from Hevy with your API key (Hevy Pro)')}
+        accessory="chevron" onClick={hevySheet} />
       <Row icon="upload" iconTint="var(--blue)" title={t('Import backup')} accessory="chevron" onClick={() => fileRef.current.click()} />
       <Row icon="download" iconTint="var(--blue)" title={t('Export backup (JSON)')} accessory="chevron" onClick={doExport} />
       <Row icon="trash" iconTint="var(--red)" title={t('Reset everything')} danger onClick={() => confirmSheet({ title: t('Reset everything?'), message: t('Deletes your plan, workouts and body weight on this device. This cannot be undone.'), confirmText: t('Delete everything'), danger: true, onConfirm: () => { replaceState(JSON.parse(JSON.stringify(DEF)), true); nav('/home'); toast(t('All data reset')) } })} />

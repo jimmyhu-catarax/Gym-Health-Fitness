@@ -64,3 +64,22 @@ export function importIsEmpty(parsed) {
     default: return false
   }
 }
+
+/**
+ * State fields that are credentials rather than data.
+ *
+ * A backup gets emailed to yourself, dropped in cloud storage, kept in Downloads for a year.
+ * The training history in it is the point; a live API key riding along silently is not, and
+ * nobody would think to check. Restoring a backup therefore leaves the key blank and it is
+ * re-entered once, which is the right trade against a credential leaking with a file the user
+ * treats as harmless.
+ */
+export const CREDENTIAL_KEYS = ['hevyKey']
+
+/** A copy of the state safe to write to a file the user will hand around. */
+export function redactCredentials(state) {
+  if (!state || typeof state !== 'object') return state
+  const out = { ...state }
+  for (const k of CREDENTIAL_KEYS) if (k in out) out[k] = null
+  return out
+}

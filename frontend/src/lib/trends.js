@@ -14,6 +14,7 @@
 // support the claim — a "mix shift" computed from four nights is noise with a chart attached.
 
 import { weekKey } from './format.js'
+import { dailyLoad } from './session-load.js'
 
 const DAY = 86400000
 const round1 = n => Math.round(n * 10) / 10
@@ -125,22 +126,44 @@ export const loadBand = ratio => LOAD_BANDS.find(b => ratio < b.max)
  *
  * Requires a full chronic window. A 28-day baseline built from nine days is not a baseline,
  * and the ratio would be dominated by however many days happened to be there.
+ *
+ * `fill` says what a day with no row means, and the two series disagree about it. A band
+ * records a strain every day, so a missing day is a gap in the data and averaging over the
+ * days present is right. Lifting is intermittent by design: a day with no session is a
+ * genuine zero, and averaging over training days only would rate a three-day week and a
+ * six-day week the same. With fill the mean is over the calendar — average daily load, rest
+ * days included, which is the usual formulation — and coverage becomes a question of how far
+ * back the history reaches rather than how many days in it hold a number.
  */
-export function loadBalance(metrics, { now = Date.now() } = {}) {
+export function loadBalance(metrics, { now = Date.now(), value = m => m.strain, fill = false } = {}) {
   if (!Array.isArray(metrics)) return null
+  const rows = metrics.filter(m => value(m) != null)
+  // "The last n days" means n of them: today and the n-1 before it. Off by one it is not,
+  // once `fill` starts dividing by the window length — an 8-day sum over a 7-day span
+  // reads as a heavier week than it was.
   const inWindow = n => {
-    const since = now - n * DAY
-    return metrics.filter(m => m.strain != null && dayMs(m.d) >= since && dayMs(m.d) <= now)
+    const since = now - (n - 1) * DAY
+    return rows.filter(m => dayMs(m.d) >= since && dayMs(m.d) <= now)
   }
   const chronicDays = inWindow(CHRONIC_DAYS)
   const acuteDays = inWindow(ACUTE_DAYS)
-  // Coverage, not row count: a month holding six strain values would otherwise pass.
-  if (chronicDays.length < CHRONIC_DAYS * 0.6 || acuteDays.length < ACUTE_DAYS * 0.5) {
-    return { ok: false, have: chronicDays.length, need: Math.ceil(CHRONIC_DAYS * 0.6) }
+  const first = rows.length ? Math.min(...rows.map(m => dayMs(m.d))) : null
+  const thin = { ok: false, have: chronicDays.length, need: Math.ceil(CHRONIC_DAYS * 0.6) }
+  if (fill) {
+    // Half a chronic window of history is not a chronic baseline, however many sessions
+    // happen to sit in it.
+    if (first == null || first > now - (CHRONIC_DAYS - 1) * DAY) return thin
+  } else if (chronicDays.length < CHRONIC_DAYS * 0.6 || acuteDays.length < ACUTE_DAYS * 0.5) {
+    // Coverage, not row count: a month holding six strain values would otherwise pass.
+    return thin
   }
-  const acute = mean(acuteDays.map(m => m.strain))
-  const chronic = mean(chronicDays.map(m => m.strain))
-  if (!chronic) return { ok: false, have: chronicDays.length, need: Math.ceil(CHRONIC_DAYS * 0.6) }
+  const avg = (rowsIn, span) => {
+    const total = rowsIn.reduce((a, m) => a + value(m), 0)
+    return fill ? total / span : mean(rowsIn.map(value))
+  }
+  const acute = avg(acuteDays, ACUTE_DAYS)
+  const chronic = avg(chronicDays, CHRONIC_DAYS)
+  if (!chronic) return thin
   const ratio = acute / chronic
   return {
     ok: true,
@@ -156,20 +179,55 @@ export function loadBalance(metrics, { now = Date.now() } = {}) {
  * days is a different week from seven moderate ones even where the mean matches. Partial
  * weeks are kept and labelled with their day count so the newest bar is not read as a drop.
  */
-export function weeklyStrain(metrics, { weeks = 8, now = Date.now() } = {}) {
+export function weeklyStrain(metrics, { weeks = 8, now = Date.now(), value = m => m.strain } = {}) {
   if (!Array.isArray(metrics)) return []
   const since = now - weeks * 7 * DAY
   const by = new Map()
   for (const m of metrics) {
-    if (m.strain == null || dayMs(m.d) < since) continue
+    const v = value(m)
+    if (v == null || dayMs(m.d) < since) continue
     const k = weekKey(m.d)
     const cur = by.get(k) || { week: k, total: 0, days: 0, from: m.d }
-    cur.total = round1(cur.total + m.strain)
+    cur.total = round1(cur.total + v)
     cur.days++
     cur.to = m.d
     by.set(k, cur)
   }
   return [...by.values()].sort((a, b) => (a.from < b.from ? -1 : 1))
+}
+
+/* -------------------------------------------------------------- lifting -- */
+
+/**
+ * The same load treatment, run over the barbell half of the training.
+ *
+ * Whoop's strain series only holds the sessions Whoop scored. A lifter's week lands in it
+ * as a flat line, so "Training load" was quietly describing their cardio and calling it
+ * their training. session-load.js gives a lifting session a load of its own; this puts it
+ * through the same acute-against-chronic and week-by-week reads.
+ *
+ * The two are reported side by side and never summed. An sRPE arbitrary unit is not a
+ * Whoop strain point, a kilogram-rep is neither, and adding them would produce a number
+ * whose meaning changes with whatever mix of training the week happened to hold.
+ */
+export function liftingLoad(S, { now = Date.now(), weeks = 8 } = {}) {
+  const series = dailyLoad((S && S.workouts) || [], { now })
+  if (!series.basis || series.days.length < 2) {
+    return { ok: false, basis: series.basis, days: series.days.length }
+  }
+  const value = m => m.load
+  return {
+    ok: true,
+    basis: series.basis, unit: series.unit,
+    // How close the profile came to the better basis, so the screen can say what switching
+    // the effort column on would buy rather than leaving volume load looking like the only
+    // way to measure a session.
+    rated: series.rated, sessions: series.sessions,
+    // fill: a rest day is a day of no load, not a missing reading. Without it a week of
+    // three heavy sessions and a week of six would average out to the same number.
+    balance: loadBalance(series.days, { now, value, fill: true }),
+    weekly: weeklyStrain(series.days, { weeks, now, value }),
+  }
 }
 
 /* ---------------------------------------------------------------- all -- */
@@ -182,12 +240,17 @@ export function weeklyStrain(metrics, { weeks = 8, now = Date.now() } = {}) {
  */
 export function trendDetail(S, { now = Date.now(), days = 30 } = {}) {
   const metrics = (S && S.metrics) || []
-  if (!metrics.length) return { ok: false, missing: ['metrics'] }
+  const weeks = Math.max(4, Math.ceil(days / 7))
+  // The lifting half stands on its own history, so a profile with no band at all still gets
+  // a load read. Only a profile with neither has nothing to show.
+  const lifting = liftingLoad(S, { now, weeks })
+  if (!metrics.length && !lifting.ok) return { ok: false, missing: ['metrics', 'workouts'] }
   return {
     ok: true,
     mix: stageMix(metrics, { days, now }),
     shortfall: sleepShortfall(metrics, { days, now }),
     load: loadBalance(metrics, { now }),
-    weekly: weeklyStrain(metrics, { weeks: Math.max(4, Math.ceil(days / 7)), now }),
+    weekly: weeklyStrain(metrics, { weeks, now }),
+    lifting,
   }
 }

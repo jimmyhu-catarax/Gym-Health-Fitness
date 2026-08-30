@@ -11,7 +11,8 @@ import { starterRoutines } from './lib/starter.js'
 import Media, { Thumb } from './components/Media.jsx'
 import Stepper from './components/Stepper.jsx'
 import Icon from './components/Icon.jsx'
-import { Button, Slider, Switch, Segmented, SelectRow, Row, NumberField } from './components/ui.jsx'
+import { Button, Slider, Switch, Segmented, SelectRow, Row, NumberField, TextField, TextArea } from './components/ui.jsx'
+import { cleanNote, NOTE_MAX } from './lib/notes.js'
 import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
 import BodyMap from './components/BodyMap.jsx'
 import { loadOfWorkouts } from './lib/muscles.js'
@@ -25,6 +26,9 @@ import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
 import { MOBILE, shareExport } from './lib/mobile.js'
 import { chronoAge } from './lib/fitness-age.js'
+import { syncHevy, HEVY_MESSAGE, COVERAGE_FLOOR } from './lib/hevy-api.js'
+import { mapRoutines, applyRealRoutines } from './lib/hevy-routines.js'
+import { normName as normRoutineName } from './lib/derive-routines.js'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -242,6 +246,25 @@ function ImportSummary({ parsed, close }) {
   const fields = parsed.fields || [...new Set(metrics.flatMap(Object.keys))]
     .filter(k => !['d', 't', 'src'].includes(k))
 
+  // Routines rebuilt out of the sessions (derive-routines.js). This is an inference, so it
+  // gets the same treatment as a unit conversion: shown, named and refusable, on the last
+  // screen before anything is written.
+  //
+  // A Hevy API sync overlays the real routines on top (hevy-routines.js), and those are not
+  // an inference at all. The two are told apart here rather than blurred: a user deciding
+  // whether to accept a routine should know whether the app read it or guessed it.
+  const routines = parsed.routines || []
+  const realCount = routines.filter(r => r.real).length
+  // A routine whose name is already in the plan is not overwritten by an import — mergeImport
+  // hands it the sessions and keeps what is there, because the local one may have been edited
+  // here. That is the right default, but it has to be *said*: listing a Hevy routine on this
+  // sheet and then quietly keeping a different one under that name is the kind of gap between
+  // the summary and the write that this sheet exists to close.
+  const taken = new Set((st.routines || []).map(r => normRoutineName(r.name)))
+  const unnamed = (parsed.skippedRoutines || []).filter(r => r.why === 'generic')
+    .reduce((a, r) => a + r.sessions, 0)
+  const refused = (parsed.skippedRoutines || []).filter(r => r.why !== 'generic')
+
   const have = isMetrics ? metricHave
     : isBW ? parsed.bodyweight.filter(b => st.bodyweight.some(x => x.d === b.d)).length
       : parsed.workouts.filter(w => st.workouts.some(x => x.d === w.d)).length
@@ -260,7 +283,8 @@ function ImportSummary({ parsed, close }) {
     close()
     toast(isMetrics ? t('{0} days of health data imported', metricFresh)
       : isBW ? t('{0} weigh-ins imported', res.added)
-        : t('{0} workouts imported', res.added))
+        : res.routines ? t('{0} workouts and {1} routines imported', res.added, res.routines)
+          : t('{0} workouts imported', res.added))
   }
 
   return <>
@@ -323,6 +347,42 @@ function ImportSummary({ parsed, close }) {
         ? '{0} sets bring an {1} with them — switch on Effort per set in Settings to see it.'
         : '{0} sets bring an {1} with them.',
       parsed.rirSets || parsed.rpeSets, parsed.rirSets ? 'RIR' : 'RPE')}
+    </div>}
+    {/* Notes used to be read off the file and thrown away. Now they arrive — say how many,
+        because free text is the one thing an import cannot sanity-check for you. */}
+    {!isBW && !isMetrics && parsed.notes > 0 && <div className="small dim" style={{ marginBottom: 10 }}>
+      {t(parsed.notes === 1 ? '{0} note comes with these sessions.' : '{0} notes come with these sessions.', parsed.notes)}
+    </div>}
+    {routines.length > 0 && <>
+      <h4 className="sec">{realCount === routines.length ? t('Your Hevy routines')
+        : realCount ? t('Your routines') : t('Routines rebuilt from these sessions')}</h4>
+      <div className="list" style={{ marginBottom: 8 }}>
+        {routines.map(r => <div key={r.id} className="item">
+          <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
+          <div className="grow">
+            <div className="tt">{r.name}</div>
+            <div className="ss">{exCount(r.ex.length)} · {
+              r.real && taken.has(normRoutineName(r.name)) ? t('already in your plan — yours is kept')
+                : r.real
+                  ? (r.sessions ? t('from Hevy · {0} sessions', r.sessions) : t('from Hevy · not trained yet'))
+                  : t('rebuilt from {0} sessions', r.sessions)
+            }</div>
+          </div>
+        </div>)}
+      </div>
+      <div className="small dim" style={{ marginBottom: 10 }}>
+        {realCount === routines.length
+          ? t('These came straight from your Hevy account, so they are the routines themselves rather than a guess at them. You can edit or delete any of them afterwards.')
+          : realCount
+            ? t('The ones marked from Hevy came straight from your account. The rest were rebuilt from your history, which records what you trained but never what you planned. You can edit or delete any of them afterwards.')
+            : t('Your history records what you trained, never what you planned. These are the plans behind it — you can edit or delete any of them afterwards.')}
+      </div>
+    </>}
+    {!isBW && !isMetrics && unnamed > 0 && <div className="small dim" style={{ marginBottom: 10 }}>
+      {t('{0} sessions carry no routine name of their own, so no routine was rebuilt from them.', unnamed)}
+    </div>}
+    {refused.length > 0 && <div className="small dim" style={{ marginBottom: 10 }}>
+      {t('Left as history only: {0}.', refused.map(r => r.name).join(', '))}
     </div>}
     {!isBW && !isMetrics && parsed.unmatchedNames.length > 0 && <>
       <h4 className="sec">{t('Not in the library — added as your own exercises')}</h4>
@@ -445,6 +505,99 @@ export async function importFromApp(file, onDone) {
   ui().openSheet(close => <ImportSummary parsed={parsed} close={close} />)
   onDone && onDone()
 }
+
+/* ============================ Hevy sync ============================ */
+// The same import, without the export-a-file step.
+//
+// Everything below the fetch is the file path unchanged: lib/hevy-api.js turns the response
+// into the CSV Hevy itself exports, parseImport reads it exactly as it reads a dropped file,
+// and ImportSummary still stands between the result and anything being written. Nothing about
+// dedup, exercise matching or routine rebuilding is special-cased for having come over the
+// network — a synced workout and an exported one are the same workout.
+//
+// The key is saved only after a sync has succeeded with it. A key that Hevy just rejected is
+// not worth persisting, and silently keeping one makes the next failure harder to read.
+function HevySheet({ close }) {
+  const st = useStore(s => s.S)
+  const [key, setKey] = useState(st.hevyKey || '')
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState(null)
+  const [err, setErr] = useState(null)
+
+  const [review, setReview] = useState(null)
+
+  const go = (r, parsed) => {
+    update(s => { s.hevyKey = key.trim() })
+    close()
+    // Say so rather than quietly importing a prefix of somebody's history.
+    if (r.truncated) toast(t('Fetched the most recent {0} workouts — sync again for the rest', r.workouts))
+    ui().openSheet(c2 => <ImportSummary parsed={parsed} close={c2} />)
+  }
+
+  const run = async () => {
+    setBusy(true); setErr(null); setNote(null)
+    try {
+      const r = await syncHevy(key, { onProgress: p => setNote(t('{0} workouts so far…', p.count)) })
+      let parsed = parseImport(r.csv, { unit: S().unit })
+      if (parsed.error || importIsEmpty(parsed)) { setErr(t(HEVY_MESSAGE.shape)); setBusy(false); return }
+      // The file path had to reconstruct routines from the history; the API hands over the
+      // real ones. Overlay them, keeping the derived id wherever the names agree so the
+      // sessions the derivation linked stay linked. See lib/hevy-routines.js.
+      if (r.routines && r.routines.length) parsed = applyRealRoutines(parsed, mapRoutines(r.routines))
+      // Most sets carried a number: nothing to query, straight to the normal confirm sheet.
+      // A low share means the mapper read Hevy's envelope but not its sets, which imports a
+      // history of empty ones — quiet enough that nobody would catch it on the summary alone.
+      if (r.sets && r.measured / r.sets >= COVERAGE_FLOOR) return go(r, parsed)
+      setReview({ r, parsed }); setBusy(false)
+    } catch (e) {
+      setErr(t(HEVY_MESSAGE[e && e.code] || HEVY_MESSAGE.http))
+      setBusy(false)
+    }
+  }
+
+  if (review) {
+    const { r } = review
+    const pct = n => Math.round((n / r.sets) * 100) + '%'
+    return <>
+      <h3>{t('Check this before importing')}</h3>
+      <div className="muted small" style={{ lineHeight: 1.5, marginBottom: 10 }}>
+        {t('Hevy sent {0} workouts, but only {1} of their {2} sets carried a number this could read. That usually means Hevy has renamed a field — importing now would file those sets as empty.', r.workouts, r.measured, r.sets)}
+      </div>
+      <div className="small" style={{ lineHeight: 1.7, marginBottom: 10 }}>
+        {t('Weights')}: <b>{pct(r.coverage.weight)}</b> · {t('Reps')}: <b>{pct(r.coverage.reps)}</b> · {t('Duration')}: <b>{pct(r.coverage.duration)}</b> · {t('Distance')}: <b>{pct(r.coverage.distance)}</b>
+      </div>
+      {!!r.unread.length && <div className="dim small" style={{ lineHeight: 1.5, marginBottom: 12 }}>
+        {t('Fields it did not read:')} <code>{r.unread.join(', ')}</code>
+      </div>}
+      <Button variant="primary" onClick={() => go(review.r, review.parsed)}>{t('Show me what it found')}</Button>
+      <div style={{ height: 8 }} />
+      <Button onClick={() => { setReview(null) }}>{t('Back')}</Button>
+    </>
+  }
+
+  return <>
+    <h3>{t('Sync from Hevy')}</h3>
+    <div className="muted small" style={{ lineHeight: 1.5, marginBottom: 12 }}>
+      {t('Pulls your workouts straight from Hevy — no export needed. Your key comes from hevy.com/settings?developer, which needs Hevy Pro; without it, the CSV export still imports.')}
+    </div>
+    <TextField value={key} onChange={e => setKey(e.target.value)} type="password"
+      autoComplete="off" spellCheck="false" placeholder={t('Hevy API key')} aria-label={t('Hevy API key')} />
+    {note && <div className="dim small" style={{ marginTop: 8 }}>{note}</div>}
+    {err && <div className="small" style={{ marginTop: 8, lineHeight: 1.45, color: 'var(--red-ink)' }}>{err}</div>}
+    <div style={{ height: 14 }} />
+    <Button variant="primary" icon="download" disabled={busy || !key.trim()} onClick={run}>
+      {busy ? t('Syncing…') : t('Sync now')}
+    </Button>
+    {st.hevyKey && <><div style={{ height: 8 }} />
+      <Button variant="danger" disabled={busy} onClick={() => { update(s => { s.hevyKey = null }); setKey(''); toast(t('Hevy key forgotten')) }}>
+        {t('Forget key')}
+      </Button></>}
+    <div className="dim small" style={{ marginTop: 12, lineHeight: 1.5 }}>
+      {t('Nothing is written until you confirm it on the next screen, and re-syncing never duplicates a day you already have.')}
+    </div>
+  </>
+}
+export const hevySheet = () => ui().openSheet(close => <HevySheet close={close} />)
 
 /* ============================ target weight ============================ */
 export function bwDeltaColor(delta, currentW) {
@@ -973,18 +1126,49 @@ function WorkoutDetail({ w, close }) {
   return <>
     <h3>{w.name}</h3>
     <div className="muted small" style={{ marginBottom: 12 }}>{[fmtDate(w.d, true), ...durPart(w.end - w.start), fmtVol(w.vol, st.unit), ...(w.bw ? [fmtNum(w.bw) + ' ' + st.unit] : [])].join(' · ')}</div>
+    {w.note && <div className="note-block">{w.note}</div>}
     {w.entries.map((e, i) => {
       const ex = EXIDX[e.id]
       return <div key={i} className="row" style={{ marginBottom: 12, alignItems: 'flex-start' }}>
         {ex && <Thumb ex={ex} />}
         <div className="grow"><div className="tt capitalize" style={{ fontWeight: 600 }}>{ex ? ex.n : (e.n || e.id)} {w.prs && w.prs.includes(e.id) && <span className="pr"><Icon name="trophy" />PR</span>}</div>
-          <div className="ss">{e.sets.filter(s => s.done).map(s => setLabel(e.id, s, e.target)).join('  ·  ') || t('no sets')}</div></div>
+          <div className="ss">{e.sets.filter(s => s.done).map(s => setLabel(e.id, s, e.target)).join('  ·  ') || t('no sets')}</div>
+          {e.note && <div className="note-block sm">{e.note}</div>}</div>
       </div>
     })}
     <Button variant="danger" onClick={() => confirmSheet({ title: t('Delete workout?'), message: t('This removes it from your history for good.'), confirmText: t('Delete'), danger: true, onConfirm: () => { update(s => { s.workouts = s.workouts.filter(x => x.id !== w.id) }); close(); toast(t('Workout deleted')) } })}>{t('Delete workout')}</Button>
   </>
 }
 export const workoutDetailSheet = w => ui().openSheet(close => <WorkoutDetail w={w} close={close} />)
+
+/* ============================ notes ============================ */
+/**
+ * Write the free text next to a session or an exercise.
+ *
+ * Deliberately one sheet for both levels rather than an always-visible field on every
+ * exercise block: a note is written once or twice a session, and a permanently open
+ * textarea under each exercise would push the set rows — the thing you are actually
+ * here to tap — below the fold on a phone.
+ *
+ * Saving a note that is only whitespace clears it rather than storing '', so the two
+ * ways of having no note stay the same one. lib/notes.js says why that matters.
+ */
+function NoteEditor({ title, hint, value, onSave, close }) {
+  const [v, setV] = useState(value || '')
+  return <>
+    <h3>{title}</h3>
+    {hint && <div className="muted small" style={{ marginBottom: 10 }}>{hint}</div>}
+    <TextArea rows={5} maxLength={NOTE_MAX} value={v} autoFocus
+      placeholder={t('How it felt, what you changed, anything worth knowing next time')}
+      onChange={e => setV(e.target.value)} />
+    <div style={{ height: 10 }} />
+    <div className="row">
+      {!!cleanNote(value) && <Button variant="danger" onClick={() => { onSave(null); close() }}>{t('Clear')}</Button>}
+      <Button variant="primary" onClick={() => { onSave(cleanNote(v)); close() }}>{t('Save note')}</Button>
+    </div>
+  </>
+}
+export const noteSheet = opts => ui().openSheet(close => <NoteEditor {...opts} close={close} />)
 
 /* ============================ calendar ============================ */
 function Calendar({ start, close }) {
@@ -1173,9 +1357,18 @@ function doFinishWorkout() {
     // `target` (what the session prescribed) is kept alongside the sets: without it a
     // finished workout cannot say whether it hit its reps, and a timed session reads back
     // as "0 reps". It is what the progression engine works from.
-    entries: A.entries.map(e => ({ id: e.id, sets: e.sets, topW: e.topW || null, target: e.target || null })).filter(e => e.sets.some(s => s.done)),
+    entries: A.entries.map(e => {
+      const en = { id: e.id, sets: e.sets, topW: e.topW || null, target: e.target || null }
+      // Only when written: an empty string would round-trip into a backup as a note
+      // nobody wrote, and render an empty bubble in history. See lib/notes.js.
+      const n = cleanNote(e.note)
+      if (n) en.note = n
+      return en
+    }).filter(e => e.sets.some(s => s.done)),
     prs
   }
+  const wNote = cleanNote(A.note)
+  if (wNote) w.note = wNote
   w.vol = workoutVolume(w)
   update(s => {
     w.entries.forEach(e => {
