@@ -19,6 +19,7 @@
 // building a DOM.
 
 import { EXDB, EXIDX } from './exercises.js'
+import { mergeNote, countNotes } from './notes.js'
 import { uid } from './format.js'
 import { deriveRoutines, normName as normRoutineName } from './derive-routines.js'
 
@@ -77,7 +78,12 @@ const COLUMNS = [
   ['seconds', ['seconds', 'duration seconds']],
   ['time', ['time', 'duration']],
   ['setType', ['set type']],
-  ['note', ['comment', 'comments', 'notes', 'note']],
+  // Notes at both levels the exporters actually write. Hevy: `description` per session and
+  // `exercise_notes` per exercise. Strong: `Workout Notes` and `Notes`. FitNotes: `Comment`.
+  // These columns used to be mapped and then never read, so every note in an imported
+  // history was silently dropped — see lib/notes.js for why that is worth a module.
+  ['workoutNote', ['description', 'workout notes']],
+  ['exerciseNote', ['exercise notes', 'comment', 'comments', 'notes', 'note']],
 ]
 
 function mapHeader(header) {
@@ -376,12 +382,18 @@ export function parseWorkoutCSV(text, { unit = 'kg' } = {}) {
 
     let day = byDate.get(when.d)
     if (!day) {
-      day = { ex: new Map(), name: cell(r, 'workoutName') || '', start: when.t, end: null }
+      day = { ex: new Map(), exNote: new Map(), note: null, name: cell(r, 'workoutName') || '', start: when.t, end: null }
       byDate.set(when.d, day)
     }
     if (!day.name) day.name = cell(r, 'workoutName') || ''
     if (map.endTime !== undefined) { const e = parseWhen(cell(r, 'endTime')); if (e && e.t != null) day.end = e.t }
     else if (map.time !== undefined && !map.seconds && reps) { /* FitNotes' Time is per-set */ }
+    // Both exporters repeat their notes on every row of the thing the note belongs to —
+    // the session description on all of it, an exercise's notes on each of its set rows —
+    // so mergeNote() collapses the repeats and keeps only genuinely different text.
+    day.note = mergeNote(day.note, cell(r, 'workoutNote'))
+    const exNote = mergeNote(day.exNote.get(id), cell(r, 'exerciseNote'))
+    if (exNote) day.exNote.set(id, exNote)
     if (!day.ex.has(id)) day.ex.set(id, [])
     day.ex.get(id).push(set)
     sets++
@@ -411,7 +423,8 @@ export function parseWorkoutCSV(text, { unit = 'kg' } = {}) {
     const entries = [...day.ex.entries()].map(([id, ss]) => {
       const conv2 = ss.map(({ u, ...s }) => (s.w !== undefined ? { ...s, w: convRow({ ...s, u }) } : s))
       const mx = Math.max(0, ...conv2.map(s => s.w || 0))
-      return { id, sets: conv2, topW: mx || null }
+      const note = day.exNote.get(id) || null
+      return note ? { id, sets: conv2, topW: mx || null, note } : { id, sets: conv2, topW: mx || null }
     })
     const base = new Date(d + 'T00:00:00').getTime()
     const start = base + (day.start ?? 18 * 3600000)
@@ -420,6 +433,9 @@ export function parseWorkoutCSV(text, { unit = 'kg' } = {}) {
       id: 'iw' + uid(), d, start, end: end > start ? end : start,
       routineId: null, name: day.name || 'Imported', entries, prs: [],
     }
+    // Only when there is one: an absent note and an empty one have to be the same thing
+    // in state, or history renders a bubble for something nobody wrote.
+    if (day.note) w.note = day.note
     w.vol = entries.reduce((a, e) => a + e.sets.reduce((b, s) => b + (s.w || 0) * (s.r || 0), 0), 0)
     return w
   })
@@ -440,6 +456,7 @@ export function parseWorkoutCSV(text, { unit = 'kg' } = {}) {
     matchedSets: matched,
     created: created.size, unmatchedNames: [...unmatched].sort(),
     sets, skipped, warmups, fileUnit, mixedUnits, converted, rpeSets, rirSets,
+    notes: countNotes(workouts),
     from: dates[0] || null, to: dates[dates.length - 1] || null,
   }
 }

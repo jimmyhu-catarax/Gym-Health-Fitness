@@ -632,6 +632,16 @@ h4.sec{
 .progline.warn{color:var(--yellow-ink)}
 .progline svg{flex:none;margin-top:2px}
 
+/* A note somebody wrote. Nested fill + reading ink, never an accent: this is body text,
+   not a status, and colouring it would make every note look like a warning. pre-wrap
+   because cleanNote() keeps the line breaks they typed. */
+.note-block{
+  background:var(--surface-2);color:var(--label);
+  border-radius:10px;padding:9px 11px;margin:8px 0 0;
+  font-size:14px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;
+}
+.note-block.sm{font-size:13px;padding:7px 9px;margin-top:6px}
+
 /* start a timed set (issue #16) — sits where you'd otherwise reach for the checkbox */
 .setrow .setgo{
   width:30px;height:30px;border-radius:50%;flex:none;

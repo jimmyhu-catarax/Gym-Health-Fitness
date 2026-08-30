@@ -103,6 +103,8 @@ const PAIRS = [
   ['accent text on bg',        'var(--acc-ink)',    'var(--bg)',        'var(--bg)',      4.5],
   ['accent text on card',      'var(--acc-ink)',    'var(--surface)',   'var(--bg)',      4.5],
   ['accent text on surface-2', 'var(--acc-ink)',    'var(--surface-2)', 'var(--bg)',      4.5],
+  // A note is body text on the nested fill — the pair a written note is read through.
+  ['note text on surface-2',   'var(--label)',      'var(--surface-2)', 'var(--bg)',      4.5],
   ['tab label (active)',       'var(--acc-ink)',    'var(--bg-el)',     'var(--bg)',      4.5],
   ['tab label (inactive)',     'var(--label-3)',    'var(--bg-el)',     'var(--bg)',      3.0],
   ['danger text on card',      'var(--red-ink)',    'var(--surface)',   'var(--bg)',      4.5],

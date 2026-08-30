@@ -68,6 +68,31 @@ three cases, and says so:
 Weekdays are not inferred. A rebuilt routine is not put on your week schedule until you put
 it there — training days drift, and the wrong workout on today's screen is worse than none.
 
+### Your notes come with it too
+
+Every logging app has a free-text field beside the sets, and it holds the things the numbers
+cannot: *left shoulder twinged on set 3*, *belt from 100kg*, *slept badly, kept it light*.
+Both levels are read, under whatever each app calls them:
+
+| | Session note | Exercise note |
+| --- | --- | --- |
+| Hevy | `description` | `exercise_notes` |
+| Strong | `Workout Notes` | `Notes` |
+| FitNotes | — | `Comment` |
+
+Exporters repeat these on every row — Hevy writes the session description once per set — so
+identical text is folded together rather than filed eight times. Genuinely different text on
+the same exercise is kept and joined, because the same lift trained twice in a session can
+carry two different notes and picking one would lose the other.
+
+The confirm sheet counts them before anything is written. Free text is the one column an
+importer cannot sanity-check for you, so it says how many are arriving rather than letting
+them appear silently.
+
+You can write them here as well: the pencil beside an exercise during a workout, and
+**Add a session note** at the bottom of the screen. They show up in history under the
+sets they belong to.
+
 ### A note on Whoop
 
 Whoop measures strain and heart rate. It does not know what you lifted or how many times, so

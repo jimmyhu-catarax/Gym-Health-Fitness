@@ -11,7 +11,8 @@ import { starterRoutines } from './lib/starter.js'
 import Media, { Thumb } from './components/Media.jsx'
 import Stepper from './components/Stepper.jsx'
 import Icon from './components/Icon.jsx'
-import { Button, Slider, Switch, Segmented, SelectRow, Row, NumberField, TextField } from './components/ui.jsx'
+import { Button, Slider, Switch, Segmented, SelectRow, Row, NumberField, TextField, TextArea } from './components/ui.jsx'
+import { cleanNote, NOTE_MAX } from './lib/notes.js'
 import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
 import BodyMap from './components/BodyMap.jsx'
 import { loadOfWorkouts } from './lib/muscles.js'
@@ -346,6 +347,11 @@ function ImportSummary({ parsed, close }) {
         ? '{0} sets bring an {1} with them — switch on Effort per set in Settings to see it.'
         : '{0} sets bring an {1} with them.',
       parsed.rirSets || parsed.rpeSets, parsed.rirSets ? 'RIR' : 'RPE')}
+    </div>}
+    {/* Notes used to be read off the file and thrown away. Now they arrive — say how many,
+        because free text is the one thing an import cannot sanity-check for you. */}
+    {!isBW && !isMetrics && parsed.notes > 0 && <div className="small dim" style={{ marginBottom: 10 }}>
+      {t(parsed.notes === 1 ? '{0} note comes with these sessions.' : '{0} notes come with these sessions.', parsed.notes)}
     </div>}
     {routines.length > 0 && <>
       <h4 className="sec">{realCount === routines.length ? t('Your Hevy routines')
@@ -1120,18 +1126,49 @@ function WorkoutDetail({ w, close }) {
   return <>
     <h3>{w.name}</h3>
     <div className="muted small" style={{ marginBottom: 12 }}>{[fmtDate(w.d, true), ...durPart(w.end - w.start), fmtVol(w.vol, st.unit), ...(w.bw ? [fmtNum(w.bw) + ' ' + st.unit] : [])].join(' · ')}</div>
+    {w.note && <div className="note-block">{w.note}</div>}
     {w.entries.map((e, i) => {
       const ex = EXIDX[e.id]
       return <div key={i} className="row" style={{ marginBottom: 12, alignItems: 'flex-start' }}>
         {ex && <Thumb ex={ex} />}
         <div className="grow"><div className="tt capitalize" style={{ fontWeight: 600 }}>{ex ? ex.n : (e.n || e.id)} {w.prs && w.prs.includes(e.id) && <span className="pr"><Icon name="trophy" />PR</span>}</div>
-          <div className="ss">{e.sets.filter(s => s.done).map(s => setLabel(e.id, s, e.target)).join('  ·  ') || t('no sets')}</div></div>
+          <div className="ss">{e.sets.filter(s => s.done).map(s => setLabel(e.id, s, e.target)).join('  ·  ') || t('no sets')}</div>
+          {e.note && <div className="note-block sm">{e.note}</div>}</div>
       </div>
     })}
     <Button variant="danger" onClick={() => confirmSheet({ title: t('Delete workout?'), message: t('This removes it from your history for good.'), confirmText: t('Delete'), danger: true, onConfirm: () => { update(s => { s.workouts = s.workouts.filter(x => x.id !== w.id) }); close(); toast(t('Workout deleted')) } })}>{t('Delete workout')}</Button>
   </>
 }
 export const workoutDetailSheet = w => ui().openSheet(close => <WorkoutDetail w={w} close={close} />)
+
+/* ============================ notes ============================ */
+/**
+ * Write the free text next to a session or an exercise.
+ *
+ * Deliberately one sheet for both levels rather than an always-visible field on every
+ * exercise block: a note is written once or twice a session, and a permanently open
+ * textarea under each exercise would push the set rows — the thing you are actually
+ * here to tap — below the fold on a phone.
+ *
+ * Saving a note that is only whitespace clears it rather than storing '', so the two
+ * ways of having no note stay the same one. lib/notes.js says why that matters.
+ */
+function NoteEditor({ title, hint, value, onSave, close }) {
+  const [v, setV] = useState(value || '')
+  return <>
+    <h3>{title}</h3>
+    {hint && <div className="muted small" style={{ marginBottom: 10 }}>{hint}</div>}
+    <TextArea rows={5} maxLength={NOTE_MAX} value={v} autoFocus
+      placeholder={t('How it felt, what you changed, anything worth knowing next time')}
+      onChange={e => setV(e.target.value)} />
+    <div style={{ height: 10 }} />
+    <div className="row">
+      {!!cleanNote(value) && <Button variant="danger" onClick={() => { onSave(null); close() }}>{t('Clear')}</Button>}
+      <Button variant="primary" onClick={() => { onSave(cleanNote(v)); close() }}>{t('Save note')}</Button>
+    </div>
+  </>
+}
+export const noteSheet = opts => ui().openSheet(close => <NoteEditor {...opts} close={close} />)
 
 /* ============================ calendar ============================ */
 function Calendar({ start, close }) {
@@ -1320,9 +1357,18 @@ function doFinishWorkout() {
     // `target` (what the session prescribed) is kept alongside the sets: without it a
     // finished workout cannot say whether it hit its reps, and a timed session reads back
     // as "0 reps". It is what the progression engine works from.
-    entries: A.entries.map(e => ({ id: e.id, sets: e.sets, topW: e.topW || null, target: e.target || null })).filter(e => e.sets.some(s => s.done)),
+    entries: A.entries.map(e => {
+      const en = { id: e.id, sets: e.sets, topW: e.topW || null, target: e.target || null }
+      // Only when written: an empty string would round-trip into a backup as a note
+      // nobody wrote, and render an empty bubble in history. See lib/notes.js.
+      const n = cleanNote(e.note)
+      if (n) en.note = n
+      return en
+    }).filter(e => e.sets.some(s => s.done)),
     prs
   }
+  const wNote = cleanNote(A.note)
+  if (wNote) w.note = wNote
   w.vol = workoutVolume(w)
   update(s => {
     w.entries.forEach(e => {
