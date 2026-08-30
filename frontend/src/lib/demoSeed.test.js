@@ -8,6 +8,8 @@ import {
   rirOf, isHardSet, MIN_RATED, HARD_RIR
 } from './effort.js'
 import { effortOf, modeOf } from './history.js'
+import { dailyLoad, sessionLoad } from './session-load.js'
+import { trendDetail } from './trends.js'
 
 const S = buildDemoState()
 const eachSet = fn => S.workouts.forEach(w => w.entries.forEach(e => e.sets.forEach(s => fn(s, w, e))))
@@ -161,5 +163,46 @@ describe('demo physiology', () => {
     const off = S.metrics.filter(m => !trained.has(m.d)).map(m => m.strain)
     const mean = a => a.reduce((x, y) => x + y, 0) / a.length
     expect(mean(on)).toBeGreaterThan(mean(off))
+  })
+})
+
+describe('demo lifting load', () => {
+  // The demo is the only build most people see, so the load half has to be visible in it —
+  // and on the better of the two bases, since the seed rates its sets and clocks its
+  // sessions exactly as a real Hevy history would.
+  const S = buildDemoState()
+
+  it('scores every session, so the series is sRPE rather than the volume fallback', () => {
+    const dl = dailyLoad(S.workouts)
+    expect(dl.basis).toBe('srpe')
+    expect(dl.rated).toBe(dl.sessions)
+    expect(dl.days.length).toBe(S.workouts.length)
+    expect(dl.days.every(x => x.load > 0)).toBe(true)
+  })
+
+  it('gives the detail card a lifting load to draw', () => {
+    const d = trendDetail(S, { days: 90 })
+    expect(d.ok).toBe(true)
+    expect(d.lifting.ok).toBe(true)
+    expect(d.lifting.balance.ok).toBe(true)
+    expect(d.lifting.weekly.length).toBeGreaterThan(4)
+  })
+
+  it('keeps the lifting load and the Whoop strain as separate numbers', () => {
+    // Different units. If these ever come out equal something has started adding them.
+    const d = trendDetail(S, { days: 90 })
+    expect(d.load.ok).toBe(true)
+    expect(d.lifting.balance.acute).not.toBe(d.load.acute)
+  })
+
+  it('puts a deload week below the block around it, which is what the ratio reads', () => {
+    const byWeek = trendDetail(S, { days: 90 }).lifting.weekly.filter(w => w.days >= 3)
+    const totals = byWeek.map(w => w.total)
+    expect(Math.min(...totals)).toBeLessThan(Math.max(...totals) * 0.9)
+  })
+
+  it('reads a session load straight off a workout', () => {
+    const w = S.workouts[S.workouts.length - 1]
+    expect(sessionLoad(w)).toBeGreaterThan(0)
   })
 })

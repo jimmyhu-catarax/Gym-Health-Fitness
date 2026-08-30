@@ -66,11 +66,50 @@ workout — the exponential of a mean is below the mean of exponentials — so a
 scores lower than it should. It is labelled rather than mixed silently with a series-derived
 value, and there is a test asserting that inequality holds.
 
+## Lifting load
+
+A strain series only holds the sessions the band scored, and a barbell session is intermittent
+by design — thirty seconds of work, three minutes of rest — so its average heart rate
+understates it badly. A lifter's whole week lands in the strain series as a flat line with a
+couple of cardio spikes on it, and "Training load" ends up describing somebody else's training.
+
+So lifting gets a load of its own, on one of two bases. The app picks whichever the history
+supports, uses it for the whole series, and names it on screen:
+
+| Basis | What it is | When it is used |
+| --- | --- | --- |
+| **sRPE** | session RPE × minutes, in arbitrary units | when at least 60% of recent sessions are rated |
+| **Volume load** | Σ weight × reps | otherwise — every profile has it |
+
+sRPE is the better of the two: it counts a heavy triple and a set of bodyweight dips as the
+work they were. It needs the effort column, which this app leaves off by default — switch on
+**Effort per set** in Settings, or import from Hevy or Strong, both of which record it. Volume
+load is a real measure and the one most lifting apps show, but it is blind in two directions: a
+bodyweight session scores zero, and squats outscore presses for reasons that have nothing to do
+with effort.
+
+Three rules keep the number honest:
+
+- **The basis never changes within a series.** A ratio of a series against itself only means
+  something while the series measures one thing.
+- **Rest days count as zero, not as missing data.** A band records a strain every day, so a
+  gap there is absent data; lifting is intermittent, so a gap is a real rest day. The load is
+  averaged over the calendar — a week of three heavy sessions and a week of six do not come out
+  the same.
+- **Lifting load and strain are never added.** They are shown side by side and stay separate.
+  An sRPE arbitrary unit is not a Whoop strain point, a kilogram-rep is neither, and a combined
+  number would mean whatever mix of training the week happened to hold.
+
+The acute-against-chronic read on it carries the same caveat as the strain one: it describes
+whether you are ramping or easing, and it is not a measure of injury risk.
+
 ## Sources
 
 | Model | Used for | Source |
 | --- | --- | --- |
 | Banister TRIMP | training load → strain | Banister & Calvert 1980; sex coefficients from Morton, Fitz-Clarke & Banister 1990 |
+| Session RPE (sRPE) | lifting load | Foster et al. 2001, *J Strength Cond Res* 15(1):109-115 |
+| Acute:chronic workload | load balance, reported descriptively | Gabbett 2016; and the critique that keeps it descriptive, Impellizzeri et al. 2020 |
 | rMSSD, ln transform | vagal tone | Task Force of the ESC/NASPE 1996 |
 | Rolling z-score baseline | recovery | the HRV-guided-training construct, e.g. Plews et al. 2013 |
 | erf | the normal CDF | Abramowitz & Stegun 7.1.26, \|error\| < 1.5e-7 |
