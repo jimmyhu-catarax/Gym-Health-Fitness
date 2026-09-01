@@ -89,6 +89,16 @@ The progression engine already sets your loads from what you actually lifted, an
 system arguing with it would leave you unable to tell which one moved your weights. What to do
 with a red morning is your call.
 
+**Your activities.** Whoop logs each activity separately — a commute at eight, a session at
+six — and they arrive here as one workout for that day, with each activity as its own entry.
+Its duration is the time you were actually training, added up, not the stretch of clock from
+the first to the last: a 28-minute ride and a 50-minute one are 78 minutes, not the eleven
+hours between them.
+
+**Days you didn't sleep.** A night the band missed still leaves a day it measured. Those days
+arrive with their strain, calories and heart rate and no sleep or recovery, rather than being
+dropped — a hard training day is worth keeping even when the night around it is missing.
+
 ## 5. Keeping it current
 
 An export is a snapshot. It describes the days up to the moment you took it and nothing after,

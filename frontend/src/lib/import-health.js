@@ -227,9 +227,31 @@ export function parseWhoopWorkouts(text, { unit = 'kg' } = {}) {
     }
 
     const set = { min: mins || 0, speed: mins > 0 && km > 0 ? round1(km / (mins / 60)) : 0, done: true }
+    // A day's duration is how long it was trained, not the window it was trained across.
+    //
+    // Two things were wrong with taking the first row's start and the last row's end. Whoop
+    // exports newest-first, and a day's own activities come in that same descending order,
+    // so that read the day backwards — the session "began" at its latest activity and
+    // "ended" at its earliest, an `end > start` sanity check then rejected the negative
+    // span, and the day collapsed to zero duration. Not rare: 50 of 78 days in a real
+    // five-month export are multi-activity, costing 103 hours across the heatmap, the
+    // duration tiles and the month total.
+    //
+    // Spanning first-start to last-end fixes the ordering and is still the wrong number.
+    // Whoop logs a day's activities separately — a commute at eight, a session at six — and
+    // this app holds them as one workout per day, so that window is mostly the hours between
+    // them: on the same export it reads 18,772 minutes against 8,128 actually trained, and
+    // 16 days come out longer than eight hours. Undercounting by all of it and overcounting
+    // by two and a half times are the same kind of wrong.
+    //
+    // So: `start` is the earliest activity, which is a real clock time, and `end` carries the
+    // summed activity minutes. Every reader of these treats `end - start` as a duration and
+    // none renders `end` as a time of day, so this is the honest answer to the question all
+    // of them are actually asking. A single-activity day is unaffected either way.
     let day = byDate.get(when.d)
-    if (!day) { day = { ex: new Map(), start: when.t, end: null }; byDate.set(when.d, day) }
-    if (c.end >= 0) { const e = parseWhen(cell(r, 'end')); if (e && e.t != null) day.end = e.t }
+    if (!day) { day = { ex: new Map(), start: when.t, mins: 0 }; byDate.set(when.d, day) }
+    if (when.t != null && (day.start == null || when.t < day.start)) day.start = when.t
+    day.mins += mins || 0
     if (!day.ex.has(id)) day.ex.set(id, [])
     day.ex.get(id).push(set)
     sets++
@@ -242,9 +264,9 @@ export function parseWhoopWorkouts(text, { unit = 'kg' } = {}) {
     const entries = [...day.ex.entries()].map(([id, ss]) => ({ id, sets: ss, topW: null }))
     const base = new Date(d + 'T00:00:00').getTime()
     const start = base + (day.start ?? 12 * 3600000)
-    const end = day.end != null ? base + day.end : start
+    const end = start + Math.max(0, Math.round(day.mins * 60000))
     return {
-      id: 'iw' + uid(), d, start, end: end > start ? end : start,
+      id: 'iw' + uid(), d, start, end,
       routineId: null, name: 'Whoop', entries, prs: [], vol: 0,
     }
   })

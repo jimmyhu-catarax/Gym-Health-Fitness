@@ -63,6 +63,17 @@ export const METRICS = {
 }
 
 /**
+ * The metrics a night of sleep produces, as opposed to the ones a day of wearing it does.
+ *
+ * Only used to decide whether a row with no wake onset is safe to date by its cycle start —
+ * see parseWhoopMetricsCsv. Recovery is in here because Whoop scores it from the night.
+ */
+const SLEEP_KEYS = new Set([
+  'recovery', 'sleepPerf', 'sleepEff', 'sleepCons', 'sleepDur', 'inBed',
+  'sleepNeed', 'sleepDebt', 'rem', 'deep', 'light', 'awake', 'respRate',
+])
+
+/**
  * Energy is matched separately because the unit lives in the header and nowhere else.
  *
  * Some exports write kilojoules. Guessing from magnitude is the obvious shortcut and it is a
@@ -156,6 +167,23 @@ export function parseWhoopMetricsCsv(text) {
   const dateIdx = findCol(header, ...DATE_COLS)
   if (dateIdx < 0) return { error: 'no-date' }
 
+  // A cycle you did not sleep in still has a day in it.
+  //
+  // Rows are dated by wake onset, because that is the morning a night's sleep and recovery
+  // describe. But a cycle where the band recorded no sleep has an empty wake onset — and
+  // dating by it alone therefore discards the whole row, including the strain, calories and
+  // heart rate it does carry. Six rows of a real five-month export went that way carrying a
+  // day's strain, two of them 13.7 and 14.7 — substantial training, absent from the strain
+  // series and from every acute-against-chronic read taken over it. Five were days with no
+  // other record at all; the sixth shared its date with a night, which is the case the
+  // fill-only rule below exists for.
+  //
+  // The cycle's own start date is the fallback, and it is unambiguous for exactly the reason
+  // the row qualifies: there is no sleep on it to misfile. Applied per row, and only when
+  // the sleep block is genuinely empty, so a row that has sleep is never dated by anything
+  // but its wake onset.
+  const startIdx = findCol(header, 'cycle start time', 'start time')
+
   // Resolve whichever metrics this file happens to carry, keeping only the columns whose
   // values agree with what they claim to be.
   const cols = {}
@@ -184,7 +212,16 @@ export function parseWhoopMetricsCsv(text) {
     // the column exists this is exact; where it does not, the duration tiebreak below is the
     // fallback, since the night is reliably the longer of the two.
     if (napIdx >= 0 && isTrue(r[napIdx])) { naps++; continue }
-    const d = dayOf(r[dateIdx])
+    let d = dayOf(r[dateIdx])
+    // No wake onset: fall back to the cycle's start date, but only for a row whose sleep
+    // block is empty, and then only to fill gaps — a row dated by its own wake onset is the
+    // better authority for a day and must not be overwritten by one dated this way.
+    let viaStart = false
+    if (!d && startIdx >= 0 && startIdx !== dateIdx &&
+        !found.some(k => SLEEP_KEYS.has(k) && String(r[cols[k]] ?? '').trim())) {
+      d = dayOf(r[startIdx])
+      viaStart = true
+    }
     if (!d) { skipped++; continue }
     const row = byDate.get(d) || { d }
     let wrote = false
@@ -199,6 +236,9 @@ export function parseWhoopMetricsCsv(text) {
       // A nap adds a second sleeps.csv row for the same day. The night is the long one, so
       // the larger duration wins rather than whichever row happened to come last.
       if (key === 'sleepDur' && row.sleepDur != null && row.sleepDur >= val) continue
+      // Two cycles can share a calendar day — one that ended in sleep, one that did not.
+      // The wake-onset row owns the day; this one only fills what it left empty.
+      if (viaStart && row[key] != null) continue
       row[key] = round1(val)
       wrote = true
     }
