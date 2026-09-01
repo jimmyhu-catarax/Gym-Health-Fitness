@@ -296,9 +296,49 @@ describe('the real export header', () => {
   it('keeps the sleep arithmetic self-consistent', () => {
     // Light + Deep + REM = Asleep, and Asleep + Awake = In bed. If a column were mismatched
     // these identities break, so asserting them checks the mapping rather than the values.
+    //
+    // They are a check on this fixture, not a rule about Whoop. Across a real five-month
+    // export the first held on all 117 nights and the second missed two of them, by 5 and 9
+    // minutes. So neither belongs in the parser as a validation gate: promoting the second
+    // one would refuse genuine nights.
     const day = parseWhoopMetricsCsv(csv(REAL_CYCLES_HEADER, REAL_ROW)).rows.get('2024-02-09')
     expect(day.light + day.deep + day.rem).toBe(day.sleepDur)
     expect(day.sleepDur + day.awake).toBe(day.inBed)
+  })
+
+  /* A cycle with no sleep in it still has a day of training in it. Wake onset is empty, and
+     with it the whole sleep block — but Day Strain, calories and heart rate are all there.
+     Six rows of a real export were dropped this way, two of them strain over 13. */
+  const SLEEPLESS =
+    '2024-02-11 00:00:00,2024-02-12 00:00:00,UTC-05:00,,,,,,13.7,4412,' +
+    '185,79,,,,,' +
+    ',,,,,,,,,'
+
+  it('keeps a cycle that recorded no sleep, dating it by its own start', () => {
+    const r = parseWhoopMetricsCsv(csv(REAL_CYCLES_HEADER, SLEEPLESS))
+    const day = r.rows.get('2024-02-11')
+    expect(day).toMatchObject({ strain: 13.7, kcal: 4412, maxHr: 185, avgHr: 79 })
+    expect(day.recovery).toBeUndefined()
+    expect(day.sleepDur).toBeUndefined()
+  })
+
+  it('lets the night own the day when a sleepless cycle lands on the same date', () => {
+    // Two cycles can share a calendar day: one that ended in sleep and one that did not. The
+    // row dated by its own wake onset is the better authority, so the other only fills gaps.
+    const sameDay =
+      '2024-02-09 12:00:00,2024-02-09 23:12:00,UTC-05:00,,,,,,3.1,900,' +
+      '110,70,,,,,' + ',,,,,,,,,'
+    const r = parseWhoopMetricsCsv(csv(REAL_CYCLES_HEADER, REAL_ROW, sameDay))
+    const day = r.rows.get('2024-02-09')
+    expect(day.strain).toBe(10)      // the night's own 10.0, not the sleepless row's 3.1
+    expect(day.recovery).toBe(64)
+    expect(day.maxHr).toBe(171)
+  })
+
+  it('still refuses a row with no date of any kind', () => {
+    const undated = ',,UTC-05:00,,,,,,9.9,1000,' + '150,80,,,,,' + ',,,,,,,,,'
+    const r = parseWhoopMetricsCsv(csv(REAL_CYCLES_HEADER, undated))
+    expect(r.error).toBe('unrecognised')
   })
 })
 

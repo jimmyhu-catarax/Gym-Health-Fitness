@@ -85,10 +85,16 @@ _Last updated: 2026-08-25 (recovery & sleep card; loop running)_
   reported as *load balance only* — Impellizzeri et al. (2020) showed the windows are
   mathematically coupled and the popular risk thresholds did not survive re-analysis, so a
   test asserts the band labels carry no risk language.
+- **A real export has now been through it**, and it found two bugs the synthetic fixtures
+  could not — both in the shape of the file rather than in any column. Whoop writes rows
+  **newest-first**, and every fixture here was ascending; and a cycle you did not sleep in
+  has an empty wake onset, which the date logic read as "no date" and dropped the whole row.
+  Both are fixed with tests in Whoop's real row order. The lesson worth keeping: these
+  fixtures are right about *columns* — that part was cross-corroborated and held perfectly —
+  and were wrong about *ordering and absence*, which is what only a real file shows.
 - **Next step:** everything buildable on data that already parses is done — trends, the
   training join, readiness on the Start screen, and `docs/WHOOP.md` as the how-to. What
-  remains is **blocked on the owner, not on a session**: importing a real export (the
-  fixtures are cross-corroborated but synthetic), iOS (needs a Mac), and the ingestion
+  remains is **blocked on the owner, not on a session**: iOS (needs a Mac), and the ingestion
   decision in #14. A session that finds nothing else to do here is correct to stop rather
   than invent scope. The import hardening from #12 is done —
   RFC 4180 was already handled by `parseCSV`, `__MACOSX` skipping is covered by a test, and

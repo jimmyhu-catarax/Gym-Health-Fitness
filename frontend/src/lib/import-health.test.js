@@ -205,6 +205,39 @@ describe('Whoop — workouts.csv', () => {
     expect(out.workouts[0].entries[0].sets[0].min).toBe(30)
   })
 
+  /* Every fixture above is one activity per day, in ascending order. Whoop writes neither:
+     the file arrives newest-first, and a day's own activities descend with it. That is why a
+     real export was the first thing to show that a day of several activities imported with no
+     duration at all — the first row's start was read as the day's beginning and the last
+     row's end as its finish, which is the day backwards. This one arrives the way the file
+     really does. */
+  it('reads a multi-activity day that arrives newest-first', () => {
+    const desc = [HEAD,
+      '2024-03-07 13:33:00,2024-03-07 14:14:00,41,Hiking,5.1,300,120,',
+      '2024-03-07 11:34:00,2024-03-07 12:17:00,43,Hiking,5.3,310,122,',
+      '2024-03-07 11:00:00,2024-03-07 11:13:00,13,Hiking,1.9,90,110,',
+    ].join('\n')
+    const [w] = parseWhoopWorkouts(desc).workouts
+    // The day starts at its earliest activity, not at whichever row happened to come first.
+    expect(new Date(w.start).getHours()).toBe(11)
+    expect(new Date(w.start).getMinutes()).toBe(0)
+    // And it lasts as long as it was trained — 41 + 43 + 13 — rather than zero, and rather
+    // than the 194-minute window the three of them are spread across.
+    expect((w.end - w.start) / 60000).toBe(97)
+  })
+
+  it('counts a day as long as it was trained, not as wide as its window', () => {
+    // A commute in the morning and a session in the evening is one workout here, and eleven
+    // hours of it were not training. Taking the window would overstate a real export's total
+    // by two and a half times.
+    const spread = [HEAD,
+      '2024-03-07 18:40:00,2024-03-07 19:30:00,50,Cycling,8.0,400,150,',
+      '2024-03-07 08:00:00,2024-03-07 08:28:00,28,Cycling,4.0,200,130,',
+    ].join('\n')
+    const [w] = parseWhoopWorkouts(spread).workouts
+    expect((w.end - w.start) / 60000).toBe(78)
+  })
+
   it('skips rows with neither a duration nor a distance', () => {
     const partial = [HEAD,
       '2024-03-07 06:30:00,2024-03-07 06:30:00,,Running,,,,',
