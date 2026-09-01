@@ -6,9 +6,10 @@ need — what the app protects you from and what it doesn't.
 
 ## Supported versions
 
-Only the **latest release**. Releases are semver tags (`v1.0.0` → `v1.2.3`, see
-[CHANGELOG.md](CHANGELOG.md)); there is no LTS or maintenance branch and older tags are never
-patched. A fix ships in the next release; self-hosted instances pick it up by rebuilding.
+**`main`, and only `main`.** This build cuts no releases and carries no tags of its own, so
+there is nothing else to support: a fix lands on `main` and self-hosted instances pick it up by
+pulling and rebuilding. ([CHANGELOG.md](CHANGELOG.md) is upstream openGym's release history,
+kept as a record — it does not describe this build and no tag in it exists here.)
 
 Updating a self-hosted instance:
 
@@ -22,7 +23,7 @@ The `--build` matters — without it compose restarts the image it built before 
 
 Use GitHub's private vulnerability reporting — repo **Security** tab → **Report a vulnerability**:
 
-<https://github.com/DuarteSantos8/openGym/security/advisories/new>
+<https://github.com/jimmyhu-catarax/Gym-Health-Fitness/security/advisories/new>
 
 > Private reporting has to be switched on in the repository settings for that link to work
 > (Settings → Advanced Security → Private vulnerability reporting). If it 404s, open a normal
@@ -37,11 +38,11 @@ Useful in a report: the version or commit, whether you're running the prebuilt i
 source build, your `RP_ID`/`ORIGIN` and what sits in front of the app, steps to reproduce, and
 what an attacker gets out of it.
 
-**On response times:** this is a hobby project maintained by one person alongside school. There
-is no SLA and no bounty. Expect days rather than hours, and longer during exam periods. If a
-week goes by with no reply, comment on the advisory thread — it's more likely to be a missed
-notification than a decision. If a report goes unfixed and you want to disclose publicly, say so
-in the thread; there's no objection, and no request to sit on it indefinitely.
+**On response times:** this is a personal project with a single maintainer. There is no SLA and
+no bounty. Expect days rather than hours. If a week goes by with no reply, comment on the
+advisory thread — it's more likely to be a missed notification than a decision. If a report goes
+unfixed and you want to disclose publicly, say so in the thread; there's no objection, and no
+request to sit on it indefinitely.
 
 ## In scope
 
@@ -69,7 +70,8 @@ in the thread; there's no objection, and no request to sit on it indefinitely.
   the session cookie isn't marked `Secure`.
 - Scanner output with no working exploit, and `npm audit` findings in build-time
   devDependencies (Vite, Vitest, Capacitor CLI) that never reach a running instance.
-- The GitHub Pages demo build — it has no backend at all, everything stays in that browser.
+- Guest mode (`VITE_DEMO=1`, or signing in as a guest) — it never reaches the backend at all,
+  and everything stays in that browser's `localStorage`.
 - Third-party content: the exercise image/GIF dataset and the CDN it's fetched from.
 
 ## Security model

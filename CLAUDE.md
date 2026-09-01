@@ -6,13 +6,17 @@ A self-hosted gym, body-weight and health tracker. React 19 + Vite PWA frontend,
 Node passkey/push API, Capacitor shells for Android/iOS, all behind `docker compose up`.
 
 **This fork is its own product**, not a personal instance and not a staging area for upstream
-PRs. It is free to diverge from openGym, which means two things a session should act on rather
-than tiptoe around: upstream branding is *wrong here* and gets replaced as we touch it (README
-badges, `docs/SELF_HOSTING.md`'s clone URL and `SECURITY.md`'s release process still point at
-`DuarteSantos8/openGym` — issue #4 tracks it). None of that licenses a drive-by rewrite —
-open an issue, do it deliberately. The prebuilt images that used to sit in `docker-compose.yml`
-were upstream's; they were removed rather than replaced, so compose now always builds this
-repo's code.
+PRs. It is free to diverge from openGym, which means upstream branding is *wrong here* and gets
+replaced as we touch it. The links are done — every clone URL, badge, reporting path and in-app
+link now points at `jimmyhu-catarax/Gym-Health-Fitness` (#4). **`website/` is the exception, and
+knowing why saves a session an argument with itself:** it is upstream's marketing site, on
+upstream's domain, offering an APK this build does not produce, bylined and copyrighted to
+upstream's author. Its repo links were repointed because they route support traffic; the rest
+cannot be *repointed*, only rewritten, and rewriting a site into someone else's identity is the
+naming decision in #6. Leave it until #6 lands. None of this licenses a drive-by rewrite
+anywhere else either — open an issue, do it deliberately. The prebuilt images that used to sit
+in `docker-compose.yml` were upstream's; they were removed rather than replaced, so compose now
+always builds this repo's code.
 
 This file records what a session **cannot** work out by reading the code. Layout, dependencies
 and the standard build commands are deliberately not here — `ls`, the manifests and `--help`
