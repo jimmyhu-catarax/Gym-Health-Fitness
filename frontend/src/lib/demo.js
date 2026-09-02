@@ -11,4 +11,7 @@
 // lands in a self-hosted bundle.
 export const DEMO = import.meta.env.VITE_DEMO === '1'
 export const DEMO_SEEDED = 'gym_demo_seeded_v1'
-export const REPO = 'https://github.com/DuarteSantos8/openGym'
+// The one place this URL is written. It ships to users — Login's "self-host it" link, two rows
+// in Settings and the footer — so a copy that drifts sends somebody to the wrong project's
+// tracker. Import it; don't retype it.
+export const REPO = 'https://github.com/jimmyhu-catarax/Gym-Health-Fitness'

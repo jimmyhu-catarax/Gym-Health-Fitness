@@ -52,13 +52,17 @@ cd frontend && npm test
 
 | You have | Goes to |
 | --- | --- |
-| A question, or self-hosting that won't behave | [Discussions → Q&A](https://github.com/DuarteSantos8/openGym/discussions/categories/q-a) |
-| An idea you're not sure about yet | [Discussions → Ideas](https://github.com/DuarteSantos8/openGym/discussions/categories/ideas) |
-| A reproducible bug | [Issues](https://github.com/DuarteSantos8/openGym/issues) |
+| A question, or self-hosting that won't behave | [Issues](https://github.com/jimmyhu-catarax/Gym-Health-Fitness/issues) |
+| An idea you're not sure about yet | [Issues](https://github.com/jimmyhu-catarax/Gym-Health-Fitness/issues) |
+| A reproducible bug | [Issues](https://github.com/jimmyhu-catarax/Gym-Health-Fitness/issues) |
+| A security hole | [SECURITY.md](SECURITY.md) — privately, not here |
 | A change you've already built | A pull request |
 
-An answered question in Q&A is worth more than the same answer buried in a closed issue — the
-next person searching "passkey login fails behind my reverse proxy" actually finds it.
+Discussions isn't enabled on this repository, so the first three all land in Issues. Say which
+one yours is in the first line — a question and a bug report want different answers, and the
+label is the only thing that tells them apart. Answered questions are worth leaving open long
+enough to be findable: the next person searching "passkey login fails behind my reverse proxy"
+should land on yours.
 
 ## Reporting bugs
 

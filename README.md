@@ -19,9 +19,8 @@ No account on someone else's server, no subscription, no ads. Just `docker compo
 ![Docker](https://img.shields.io/badge/Docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![No tracking](https://img.shields.io/badge/telemetry-none-f472b6?style=flat-square)
 <br>
-![GitHub last commit](https://img.shields.io/github/last-commit/DuarteSantos8/openGym?style=flat-square)
-[![GitHub stars](https://img.shields.io/github/stars/DuarteSantos8/openGym?style=flat-square)](https://github.com/DuarteSantos8/openGym/stargazers)
-[![GitHub issues](https://img.shields.io/github/issues/DuarteSantos8/openGym?style=flat-square)](https://github.com/DuarteSantos8/openGym/issues)
+![GitHub last commit](https://img.shields.io/github/last-commit/jimmyhu-catarax/Gym-Health-Fitness?style=flat-square)
+[![GitHub issues](https://img.shields.io/github/issues/jimmyhu-catarax/Gym-Health-Fitness?style=flat-square)](https://github.com/jimmyhu-catarax/Gym-Health-Fitness/issues)
 
 </div>
 
@@ -39,11 +38,16 @@ No account on someone else's server, no subscription, no ads. Just `docker compo
 
 <div align="center">
 
-### [🌐 opengym.duarte-santos.ch](https://opengym.duarte-santos.ch) · [▶ Try the live demo](https://duartesantos8.github.io/openGym/)
+### ▶ See it on example data before you commit to anything
 
-No signup, nothing to install — it runs entirely in your browser on example data.<br>
-<sub>There's no server behind the demo, so passkey sign-in, sync across devices and the
-admin dashboard only exist in a self-hosted instance.</sub>
+```bash
+cd frontend && npm install && VITE_DEMO=1 npm run dev
+```
+
+Guest mode with a seeded history, so the charts, the heatmap and the workout flow all have
+something real-looking in them.<br>
+<sub>This build has no hosted demo. Guest mode keeps everything in your browser, so passkey
+sign-in, sync across devices and the admin dashboard only exist in a self-hosted instance.</sub>
 
 </div>
 
@@ -91,8 +95,8 @@ as a home-screen app, passkey sign-in, offline support, sync across your phone a
 You need [Docker](https://docs.docker.com/get-docker/) with Compose.
 
 ```bash
-git clone https://github.com/DuarteSantos8/openGym
-cd openGym
+git clone https://github.com/jimmyhu-catarax/Gym-Health-Fitness
+cd Gym-Health-Fitness
 cp .env.example .env
 docker compose up -d --build
 ```
@@ -188,15 +192,15 @@ React, the router and Zustand.
 
 ## Community
 
-- **[Q&A](https://github.com/DuarteSantos8/openGym/discussions/categories/q-a)** — self-hosting
-  help, passkey/login trouble, "how do I…". Most login problems turn out to be an `RP_ID`/`ORIGIN`
-  mismatch.
-- **[Ideas](https://github.com/DuarteSantos8/openGym/discussions/categories/ideas)** — features
-  worth talking through before anyone writes code.
-- **[Show and tell](https://github.com/DuarteSantos8/openGym/discussions/categories/show-and-tell)**
-  — your setup, your plan templates, whatever you built on top.
-- **[Issues](https://github.com/DuarteSantos8/openGym/issues)** — bugs, and work that's already
-  been agreed on.
+Discussions isn't enabled here, so everything goes through
+**[Issues](https://github.com/jimmyhu-catarax/Gym-Health-Fitness/issues)** — bugs, self-hosting
+help, ideas worth talking through before anyone writes code, and work that's already been
+agreed on. Say which of those it is and it'll get read the right way.
+
+Two things worth knowing before you file:
+
+- Most login problems turn out to be an `RP_ID`/`ORIGIN` mismatch — check those first.
+- **Security holes don't go in Issues.** See [SECURITY.md](SECURITY.md).
 
 ## Contributing
 
