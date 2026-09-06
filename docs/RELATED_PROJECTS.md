@@ -70,7 +70,9 @@ it names the dataset, which is the intermediary, not the rights holder the attri
 names. And our "not distributed in this repository, fetched on first run" posture is the right
 shape, but it is a distribution argument, not an attribution one: the attribution is required
 wherever the media is shown. Fixing `NOTICE.md` is a deliberate change to a load-bearing file,
-so it is filed rather than done in passing — see the issue tracker.
+so it is filed rather than done in passing — [#21](https://github.com/jimmyhu-catarax/Gym-Health-Fitness/issues/21),
+which carries the clause verbatim and the open question it turns on: whether the attribution also
+belongs on a credits screen in the running app, not only in `NOTICE.md`.
 
 ### `ioandev/hevy` — no licence at all
 

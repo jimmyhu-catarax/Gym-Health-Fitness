@@ -84,7 +84,9 @@ _Last updated: 2026-09-06 (related-projects reference; loop running)_
   discipline as #12, and deliberately disjoint from it: this file is the training side, #12 the
   band side. It records one live finding — the media in `hasaneyldrm/exercises-dataset` (the
   library this app ships) is **not** MIT but © Gym visual, with a required attribution string
-  that our `NOTICE.md` does not currently carry.
+  that our `NOTICE.md` does not currently carry. Filed as **#21**, which asks the one question a
+  session cannot answer alone: whether that attribution also belongs on a credits screen in the
+  app, since the media is displayed and not merely shipped.
 - **Sleep & load detail** (`lib/trends.js`) answers the two questions a single trend line
   cannot: what your sleep is made of and whether it is shifting, and whether this week is
   heavy against your own last month. The load ratio is the acute:chronic construct and is
