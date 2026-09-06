@@ -43,7 +43,7 @@ is worse than none — it misleads with authority, which ad-hoc rediscovery at l
 
 # Project Environment Record
 
-_Last updated: 2026-08-25 (recovery & sleep card; loop running)_
+_Last updated: 2026-09-06 (related-projects reference; loop running)_
 
 ## Static — only recompute when the project's needs actually change
 
@@ -75,10 +75,16 @@ _Last updated: 2026-08-25 (recovery & sleep card; loop running)_
   Whoop did not score; `lib/metrics.js` selects it for display; a **Recovery & sleep** card in
   Stats shows it. Before that: fitness age, and `docker compose` fixed to build from source.
   **PRs #1, #2, #3, #7, #8, #9 and #11 are merged.** 793 tests.
-- **Open:** issues **#4** (repo links route bug reports and security advisories to upstream),
-  **#6** (product name), **#10** (whether to publish fork-owned images), **#12** (the Whoop /
-  OpenStrap survey — licences, verbatim CSV schemas, API reference; *extend it, do not
-  re-survey*).
+- **Open:** issues **#6** (product name), **#10** (whether to publish fork-owned images), **#12**
+  (the Whoop / OpenStrap survey — licences, verbatim CSV schemas, API reference; *extend it, do
+  not re-survey*), **#14** (how data gets off the band), **#17** (writing sessions back to Hevy).
+  **#4** is closed — the links landed in #19.
+- **The related-projects reference is `docs/RELATED_PROJECTS.md`** — trackers, analytics apps and
+  exercise datasets, each licence read from its `LICENSE` file. Same "extend, don't re-survey"
+  discipline as #12, and deliberately disjoint from it: this file is the training side, #12 the
+  band side. It records one live finding — the media in `hasaneyldrm/exercises-dataset` (the
+  library this app ships) is **not** MIT but © Gym visual, with a required attribution string
+  that our `NOTICE.md` does not currently carry.
 - **Sleep & load detail** (`lib/trends.js`) answers the two questions a single trend line
   cannot: what your sleep is made of and whether it is shifting, and whether this week is
   heavy against your own last month. The load ratio is the acute:chronic construct and is
