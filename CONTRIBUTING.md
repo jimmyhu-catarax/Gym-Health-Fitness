@@ -33,6 +33,11 @@ cd frontend && npm test
 - **Match the style.** Small components, clear names, comments only where the "why" isn't obvious.
   State lives in the Zustand store (`src/store`); pure helpers in `src/lib`.
 - **Don't commit** the exercise media (`media/`) or `data/` — they're gitignored.
+- **Check whether someone already solved it.** [docs/RELATED_PROJECTS.md](docs/RELATED_PROJECTS.md)
+  is the standing list of open-source trackers, analytics apps and exercise datasets in this space,
+  with each one's licence read from its `LICENSE` file. Methods can be reimplemented freely with a
+  citing comment; source can only be ported under a licence compatible with our AGPL, and every
+  port earns a `NOTICE.md` entry.
 - **Test the flow** you touched — click through the affected screens (and the workout flow) in a
   browser before opening a PR.
 - **Training logic gets a unit test.** Anything deciding what you lift next, or reading a logged
