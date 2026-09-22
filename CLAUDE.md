@@ -121,3 +121,62 @@ see charts, the heatmap and the workout flow with real-looking data.
 - **CI runs the suite and the build** on every PR and every push to main, over Node 22 and 24
   (`.github/workflows/test.yml`). Run `cd frontend && npm test` before pushing anyway — it
   takes three seconds and saves a round trip.
+
+## What this file is, what enforces it, and what must not arrive here
+
+### This file holds rules, not measurements
+
+A rule cannot go stale. A measured number can, and an always-loaded file is the worst place
+to keep one — nobody re-reads it, so it quietly becomes the opposite of reality. This repo
+already says that better than anyone: *a memory file that confidently states the opposite of
+reality is worse than one that says nothing.* It applies here too.
+
+So numbers live where the command that produces them lives. Test and file counts come from
+`cd frontend && npm test`; the media size comes from `scripts/fetch-media.sh`; what a session
+can and cannot verify comes from `.claude/hooks/session-start.sh`, which prints it on every
+start. A figure quoted inside a correction — "the prebuilt images were upstream's" — is a
+record of what was wrong, not a claim about now, and stays.
+
+### Gated, or memory
+
+| Rule | Backstop | State |
+|---|---|---|
+| Nothing written into `data/` or `media/img\|gif` | `scripts/check-protected-paths.sh`, CI `secrets` job, every push and PR | **gated** — verified 2026-09-22: exits 1 on a committed `data/secret.json`, 0 on this branch's own diff |
+| `.gitignore` keeps its carve-outs | same script, second check | **gated** — "still carries its four protective carve-outs" |
+| Training logic has a unit test | `.github/workflows/test.yml`, Node 22 and 24 | **gated** — 28 files, 1152 tests, 3.96 s locally on Node 22.22.2, 2026-09-22 |
+| The build still builds | same workflow, `npm run build` | **gated** |
+| `SESSION_SETUP.md` runs first, every session | `.claude/hooks/session-start.sh` | **gated** — the instruction had no executor until 2026-09-22 |
+| New dependencies are a hard sell | nothing. The hook says it; nothing counts `package.json` | **memory** |
+| No hosted database — JSON files on disk, by design | nothing | **memory**, and the likeliest one to fail, because a Supabase MCP server is one tool call away |
+| Ask before `rm data/`, `down -v`, a history rewrite | nothing. Destruction is not diffable | **memory** |
+| i18n: the English string is the key | nothing | **memory** — a missing `t()` renders fine |
+| `website/` left alone until #6 | nothing | **memory** |
+| AGPL, `NOTICE.md` attributions intact | nothing checks that MuscleMap or the dataset credit survived an edit | **not built** — a path check in the `secrets` job would cover it; nobody has asked |
+
+Memory is not a weaker rule. It is a weaker control, and the column says which is which.
+
+### Closing work
+
+Say what you did not check. A cloud session cannot run `docker compose`, the passkey/push API,
+the Capacitor shells, or anything reading real `data/` — the hook prints that list, and nothing
+on it may be reported as tested. "Ran the suite, could not run Docker" is the finished report;
+"tests pass" alone is a coverage claim this environment cannot make.
+
+### Siblings, and what must not cross in
+
+Eleven other repos share this account: Squash-Video-Analysis, JYH-Credentials-Concierge,
+Dicktation, Informed-Consent-Forms, JYH-Health-and-Fitness, Maximize-Credit-Card-Benefits,
+NJEE-Financial-Analysis, Stock-Screener, Trillion-Game, Dry-Eye-Tech, jimmyhumd-digital-brand.
+(A twelfth, Surgery-Sensei, exists and has not been reviewed.) Good habits travel between them
+and should. Three must not travel *into* here:
+
+- **A hosted database.** Other repos reach for managed services; this one's README promises no
+  database server and no cloud dependencies, and that promise is the product.
+- **A prebuilt image.** `docker-compose.yml` had `image:` keys naming upstream's tags, and
+  compose prefers a pullable image over a build context — plain `up` silently ran upstream's
+  app. They were removed, not repointed. Never add one back.
+- **A dependency because another repo uses it.** `lib/unzip.js` and `lib/sqlite.js` are
+  hand-written because JSZip and sql.js were not worth a megabyte of WASM. A sibling's
+  `package.json` is not a precedent.
+
+And in the other direction: nothing from `data/` or `media/` leaves, for any sibling, ever.

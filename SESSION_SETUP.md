@@ -1,5 +1,13 @@
 # Session setup — run first, every session
 
+> **Since 2026-09-22 a SessionStart hook runs some of this for you.**
+> `.claude/hooks/session-start.sh` installs `frontend/` dependencies, checks the Node 22.5
+> floor, and prints what this environment **cannot** verify — Docker, the passkey/push API
+> end to end, the Capacitor shells, anything reading real `data/`. Nothing in that list may
+> be marked verified from a cloud session. The hook does **not** do steps 1–4 below; those
+> still need reading and reconciling. It exists because "run first, every session" had no
+> executor: there was no `.claude/` directory at all.
+
 This project is worked on from several machines and from the web and desktop apps. Nothing
 carries over between sessions except this repo: connectors, plugins and skills all reset. So
 the environment gets rebuilt from what's checked in, at the start of every session.

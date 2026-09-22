@@ -32,7 +32,11 @@ cd frontend && npm test
   `web-push` for notifications) — keep it near that.
 - **Match the style.** Small components, clear names, comments only where the "why" isn't obvious.
   State lives in the Zustand store (`src/store`); pure helpers in `src/lib`.
-- **Don't commit** the exercise media (`media/`) or `data/` — they're gitignored.
+- **Don't commit** the exercise media (`media/`) or `data/`. They're gitignored, and since
+  2026-09-22 CI's `secrets` job enforces it — because `.gitignore` alone never could.
+  Ignore rules decide which *untracked* files git discovers; they say nothing about content
+  arriving from a ref, so `git add -f`, a cherry-pick, and `git checkout upstream/main --
+  data/` all walk past them. Run it yourself with `scripts/check-protected-paths.sh <base-ref>`.
 - **Check whether someone already solved it.** [docs/RELATED_PROJECTS.md](docs/RELATED_PROJECTS.md)
   is the standing list of open-source trackers, analytics apps and exercise datasets in this space,
   with each one's licence read from its `LICENSE` file. Methods can be reimplemented freely with a
